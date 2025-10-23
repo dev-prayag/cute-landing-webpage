@@ -1,6 +1,6 @@
 import React from 'react'
-import OngakuKoWebsite from './OngakuKoWebsite'
+import Ongaku from './ongaku'
 
 export default function App() {
-  return <OngakuKoWebsite />
+  return <Ongaku />
 }
