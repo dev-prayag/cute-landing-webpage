@@ -261,12 +261,6 @@ const Ongaku = () => {
           <h3>Built With</h3>
           <div className="tech-grid">
             <div className="tech-item">
-              <span>Python</span>
-            </div>
-            <div className="tech-item">
-              <span>Discord.py</span>
-            </div>
-            <div className="tech-item">
               <span>JavaScript</span>
             </div>
             <div className="tech-item">
@@ -277,6 +271,9 @@ const Ongaku = () => {
             </div>
             <div className="tech-item">
               <span>Node.js</span>
+            </div>
+            <div className="tech-item">
+              <span>SQLite</span>
             </div>
           </div>
         </div>
@@ -407,8 +404,8 @@ const Ongaku = () => {
           </div>
 
           <div className="terms-footer">
-            <p>Last Updated: October 23, 2024</p>
-            <p>© 2024 Ongaku-ko. All rights reserved.</p>
+            <p>Last Updated: October 23, 2025</p>
+            <p>© 2025 Ongaku-ko. All rights reserved.</p>
           </div>
         </div>
       </div>
@@ -1135,7 +1132,7 @@ const Ongaku = () => {
       }}>
         <p>Made with 💖 by prayag.cake</p>
         <p style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-          © 2024 Ongaku-ko. All rights reserved.
+          © 2025 Ongaku-ko. All rights reserved.
         </p>
       </footer>
     </div>
