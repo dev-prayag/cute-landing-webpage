@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Zap, Music, Hammer, Gift, Ticket, Wrench, Heart, MessageCircle, UserCheck, ScrollText, Image, Mic, Sparkles, Bot, Moon, Sun, Menu, X, Github, ExternalLink, ChevronRight, Home, FileText, User } from 'lucide-react';
 
-const OngakuKoWebsite = () => {
+const Ongaku = () => {
   const [theme, setTheme] = useState('dark');
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState('home');
