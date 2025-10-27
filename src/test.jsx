@@ -31,7 +31,6 @@ const Ongaku = () => {
   const [showHome, setShowHome] = useState(true);
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const [bottomPanel, setBottomPanel] = useState('none');
-  const [canPlay, setCanPlay] = useState(false);
   
   const audioRef = useRef(null);
   const lyricsRef = useRef(null);
@@ -88,29 +87,26 @@ const Ongaku = () => {
         handleNext();
       }
     };
-    const handleLoadedData = () => setCanPlay(true);
 
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('loadeddata', handleLoadedData);
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('loadeddata', handleLoadedData);
     };
   }, [isRepeat]);
 
   useEffect(() => {
     if (audioRef.current && currentSong) {
-      const url = currentSong.downloadUrl?.find(u => u.quality === '320kbps')?.url || currentSong.downloadUrl?.[0]?.url;
-      audioRef.current.src = url;
-      audioRef.current.type = url.endsWith('.mp4') ? 'audio/mp4' : 'audio/mpeg';
+      audioRef.current.src = currentSong.downloadUrl?.find(u => u.quality === '320kbps')?.url || currentSong.downloadUrl?.[0]?.url;
       audioRef.current.load();
       setCurrentTime(0);
-      setCanPlay(false);
+      if (isPlaying) {
+        audioRef.current.play().catch(e => console.error('Play error:', e));
+      }
     }
   }, [currentSong]);
 
@@ -121,7 +117,7 @@ const Ongaku = () => {
   }, [volume, isMuted]);
 
   useEffect(() => {
-    if (currentSong && isPlaying && canPlay) {
+    if (currentSong && isPlaying) {
       const playPromise = audioRef.current?.play();
       if (playPromise !== undefined) {
         playPromise.catch(e => console.error('Play error:', e));
@@ -129,7 +125,7 @@ const Ongaku = () => {
     } else if (audioRef.current) {
       audioRef.current.pause();
     }
-  }, [isPlaying, currentSong, canPlay]);
+  }, [isPlaying, currentSong]);
 
   useEffect(() => {
     if (lyrics.length > 0 && lyricsRef.current && (showLyrics || bottomPanel === 'lyrics')) {
@@ -280,6 +276,7 @@ const Ongaku = () => {
     const songDetails = await fetchSongDetails(song.id);
     if (songDetails) {
       setCurrentSong(songDetails);
+      setDuration(parseInt(songDetails.duration) || 0);
       setIsPlaying(true);
       setCurrentTime(0);
       
@@ -333,6 +330,7 @@ const Ongaku = () => {
     setQueueIndex(index);
     const song = queue[index];
     setCurrentSong(song);
+    setDuration(parseInt(song.duration) || 0);
     setIsPlaying(true);
     setCurrentTime(0);
     
