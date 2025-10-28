@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Heart, Bookmark, Sun, Moon, ChevronUp, Search, Clock, TrendingUp, Star, Film, Tv, Calendar, X } from 'lucide-react';
+import { Play, Heart, Bookmark, Sun, Moon, ChevronUp, Search, Clock, TrendingUp, Star, Film, Tv, Calendar, X, Menu } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
@@ -20,12 +20,15 @@ const Ongaku = () => {
   const [loading, setLoading] = useState(false);
   const [serverType, setServerType] = useState('sub');
   const [showAnimeModal, setShowAnimeModal] = useState(false);
+  const [ripples, setRipples] = useState([]);
+  const [menuOpen, setMenuOpen] = useState(false);
   const videoRef = useRef(null);
-  const themeToggleRef = useRef(null);
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
     const savedLiked = JSON.parse(localStorage.getItem('liked') || '[]');
     const savedBookmarked = JSON.parse(localStorage.getItem('bookmarked') || '[]');
+    setTheme(savedTheme);
     setLiked(savedLiked);
     setBookmarked(savedBookmarked);
     fetchHomeData();
@@ -36,6 +39,10 @@ const Ongaku = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const fetchHomeData = async () => {
     setLoading(true);
@@ -101,41 +108,23 @@ const Ongaku = () => {
     setLoading(false);
   };
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
+  const toggleTheme = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
     
-    if (themeToggleRef.current) {
-      const rect = themeToggleRef.current.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      
-      const ripple = document.createElement('div');
-      ripple.style.position = 'fixed';
-      ripple.style.left = x + 'px';
-      ripple.style.top = y + 'px';
-      ripple.style.width = '0';
-      ripple.style.height = '0';
-      ripple.style.borderRadius = '50%';
-      ripple.style.background = newTheme === 'light' ? '#fff' : '#1a1a1a';
-      ripple.style.transform = 'translate(-50%, -50%)';
-      ripple.style.zIndex = '-1';
-      ripple.style.pointerEvents = 'none';
-      ripple.style.transition = 'width 0.8s ease-out, height 0.8s ease-out';
-      
-      document.body.appendChild(ripple);
-      
-      setTimeout(() => {
-        ripple.style.width = '3000px';
-        ripple.style.height = '3000px';
-      }, 10);
-      
-      setTimeout(() => {
-        setTheme(newTheme);
-        ripple.remove();
-      }, 400);
-    } else {
-      setTheme(newTheme);
-    }
+    const ripple = {
+      x,
+      y,
+      id: Date.now()
+    };
+    
+    setRipples(prev => [...prev, ripple]);
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    
+    setTimeout(() => {
+      setRipples(prev => prev.filter(r => r.id !== ripple.id));
+    }, 1000);
   };
 
   const toggleLike = (animeId) => {
@@ -172,291 +161,1082 @@ const Ongaku = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const bgClass = theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50';
-  const textClass = theme === 'dark' ? 'text-white' : 'text-gray-900';
-  const cardBg = theme === 'dark' ? 'bg-gray-800' : 'bg-white';
-  const hoverClass = theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
-
   return (
-    <div className={`min-h-screen ${bgClass} ${textClass} transition-colors duration-300`}>
-      {/* Header */}
-      <header className={`fixed top-0 left-0 right-0 z-50 ${cardBg} shadow-lg backdrop-blur-sm bg-opacity-95`}>
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-8">
-              <h1 
-                className="text-2xl font-bold cursor-pointer hover:scale-105 transition-transform"
-                onClick={() => {
-                  setCurrentPage('home');
-                  setShowAnimeModal(false);
-                }}
-              >
-                音楽Ko
-              </h1>
-              <nav className="hidden md:flex space-x-6">
-                <button 
-                  onClick={() => setCurrentPage('home')}
-                  className={`hover:text-blue-500 transition-colors ${currentPage === 'home' ? 'text-blue-500' : ''}`}
-                >
-                  Home
-                </button>
-              </nav>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search anime..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch(searchQuery)}
-                  className={`px-4 py-2 rounded-full ${cardBg} border ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-blue-500 w-64`}
-                />
-                <Search className="absolute right-3 top-2.5 w-5 h-5 text-gray-400" />
-              </div>
-              
-              <button
-                ref={themeToggleRef}
-                onClick={toggleTheme}
-                className={`p-2 rounded-full ${hoverClass} transition-all hover:scale-110`}
-              >
-                {theme === 'dark' ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className={`app ${theme}`}>
+      <style>{`
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
 
-      <div className="pt-20">
+        .app {
+          min-height: 100vh;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          transition: background 0.6s ease, color 0.6s ease;
+          position: relative;
+        }
+
+        .app.light {
+          --bg-primary: #ffffff;
+          --bg-secondary: #f0f7ff;
+          --bg-tertiary: #e3f2fd;
+          --text-primary: #1a1a1a;
+          --text-secondary: #6c757d;
+          --accent-primary: #5eb3ff;
+          --accent-secondary: #667eea;
+          --card-bg: #ffffff;
+          --border: #cfe2f3;
+          --shadow: rgba(94, 179, 255, 0.15);
+          --shadow-lg: rgba(94, 179, 255, 0.25);
+        }
+
+        .app.dark {
+          --bg-primary: #0a0e27;
+          --bg-secondary: #111827;
+          --bg-tertiary: #1a1f3a;
+          --text-primary: #f9fafb;
+          --text-secondary: #9ca3af;
+          --accent-primary: #5eb3ff;
+          --accent-secondary: #667eea;
+          --card-bg: #1f2937;
+          --border: #2d3748;
+          --shadow: rgba(94, 179, 255, 0.2);
+          --shadow-lg: rgba(94, 179, 255, 0.35);
+        }
+
+        .app {
+          background: var(--bg-primary);
+          color: var(--text-primary);
+        }
+
+        .theme-ripple {
+          position: fixed;
+          border-radius: 50%;
+          background: radial-gradient(circle, var(--accent-primary) 0%, transparent 70%);
+          pointer-events: none;
+          z-index: 9998;
+          animation: ripple-expand 1s ease-out forwards;
+        }
+
+        @keyframes ripple-expand {
+          0% {
+            width: 0;
+            height: 0;
+            opacity: 0.8;
+          }
+          100% {
+            width: 300vmax;
+            height: 300vmax;
+            opacity: 0;
+          }
+        }
+
+        .navbar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          background: var(--card-bg);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-bottom: 1px solid var(--border);
+          padding: 1rem 2rem;
+          z-index: 10000;
+          transition: all 0.3s ease;
+        }
+
+        .nav-container {
+          max-width: 1400px;
+          margin: 0 auto;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .nav-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .nav-brand:hover {
+          transform: scale(1.05);
+        }
+
+        .nav-links {
+          display: flex;
+          gap: 2rem;
+          align-items: center;
+        }
+
+        .search-container {
+          position: relative;
+        }
+
+        .search-input {
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border);
+          padding: 0.625rem 2.5rem 0.625rem 1rem;
+          border-radius: 0.75rem;
+          color: var(--text-primary);
+          font-size: 0.9375rem;
+          width: 16rem;
+          transition: all 0.3s;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: var(--accent-primary);
+          box-shadow: 0 0 0 3px var(--shadow);
+        }
+
+        .search-icon {
+          position: absolute;
+          right: 0.75rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--text-secondary);
+          pointer-events: none;
+        }
+
+        .theme-toggle {
+          background: var(--bg-tertiary);
+          border: none;
+          padding: 0.625rem;
+          border-radius: 0.75rem;
+          cursor: pointer;
+          color: var(--accent-primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s;
+          position: relative;
+          z-index: 10001;
+        }
+
+        .theme-toggle:hover {
+          background: var(--accent-primary);
+          color: white;
+          transform: rotate(180deg);
+        }
+
+        .menu-toggle {
+          display: none;
+          background: none;
+          border: none;
+          color: var(--text-primary);
+          cursor: pointer;
+        }
+
+        .container {
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 0 2rem;
+        }
+
+        .section {
+          padding: 4rem 2rem;
+          position: relative;
+          z-index: 10000;
+        }
+
+        .section-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 2rem;
+        }
+
+        .section-title {
+          font-size: 2rem;
+          font-weight: 800;
+          color: var(--text-primary);
+        }
+
+        .spotlight-section {
+          padding: 8rem 2rem 4rem;
+          background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+          position: relative;
+          overflow: hidden;
+          z-index: 10000;
+        }
+
+        .spotlight-section::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: radial-gradient(circle at 50% 50%, var(--accent-primary) 0%, transparent 70%);
+          opacity: 0.05;
+          pointer-events: none;
+        }
+
+        .spotlight-card {
+          position: relative;
+          border-radius: 1.5rem;
+          overflow: hidden;
+          height: 28rem;
+          cursor: pointer;
+          transition: transform 0.3s;
+          box-shadow: 0 10px 40px var(--shadow-lg);
+        }
+
+        .spotlight-card:hover {
+          transform: scale(1.02);
+        }
+
+        .spotlight-bg {
+          position: absolute;
+          inset: 0;
+          background-size: cover;
+          background-position: center;
+        }
+
+        .spotlight-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.5) 50%, transparent 100%);
+        }
+
+        .spotlight-content {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding: 3rem;
+        }
+
+        .spotlight-title {
+          font-size: 3rem;
+          font-weight: 800;
+          color: white;
+          margin-bottom: 1rem;
+        }
+
+        .spotlight-desc {
+          color: rgba(255,255,255,0.9);
+          font-size: 1.125rem;
+          line-height: 1.6;
+          margin-bottom: 1.5rem;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .spotlight-actions {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+        }
+
+        .btn {
+          padding: 0.875rem 2rem;
+          border-radius: 0.75rem;
+          font-weight: 600;
+          border: none;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          transition: all 0.3s;
+          font-size: 1rem;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+          color: white;
+          box-shadow: 0 4px 15px var(--shadow);
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 25px var(--shadow-lg);
+        }
+
+        .btn-icon {
+          background: var(--card-bg);
+          padding: 0.75rem;
+          border-radius: 50%;
+          border: none;
+          cursor: pointer;
+          color: var(--text-primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s;
+        }
+
+        .btn-icon:hover {
+          background: var(--accent-primary);
+          color: white;
+          transform: scale(1.1);
+        }
+
+        .anime-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+          gap: 1.5rem;
+          position: relative;
+          z-index: 10000;
+        }
+
+        .anime-card {
+          background: var(--card-bg);
+          border-radius: 1rem;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.3s;
+          border: 1px solid var(--border);
+          position: relative;
+        }
+
+        .anime-card:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 15px 40px var(--shadow-lg);
+          border-color: var(--accent-primary);
+        }
+
+        .anime-poster {
+          position: relative;
+          width: 100%;
+          height: 18rem;
+          overflow: hidden;
+        }
+
+        .anime-poster img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.3s;
+        }
+
+        .anime-card:hover .anime-poster img {
+          transform: scale(1.1);
+        }
+
+        .anime-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+          opacity: 0;
+          transition: opacity 0.3s;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          padding: 1rem;
+        }
+
+        .anime-card:hover .anime-overlay {
+          opacity: 1;
+        }
+
+        .anime-badge {
+          position: absolute;
+          top: 0.5rem;
+          left: 0.5rem;
+          background: var(--accent-primary);
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 0.5rem;
+          font-size: 0.75rem;
+          font-weight: 700;
+        }
+
+        .anime-info {
+          padding: 1rem;
+        }
+
+        .anime-title {
+          font-size: 0.9375rem;
+          font-weight: 600;
+          color: var(--text-primary);
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          margin-bottom: 0.5rem;
+        }
+
+        .anime-meta {
+          color: var(--text-secondary);
+          font-size: 0.8125rem;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.75);
+          backdrop-filter: blur(8px);
+          z-index: 10001;
+          overflow-y: auto;
+          animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .modal-container {
+          min-height: 100vh;
+          padding: 2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .modal-content {
+          background: var(--card-bg);
+          border-radius: 1.5rem;
+          max-width: 80rem;
+          width: 100%;
+          box-shadow: 0 20px 60px var(--shadow-lg);
+          position: relative;
+          animation: slideUp 0.4s;
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .modal-close {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: rgba(239, 68, 68, 0.9);
+          border: none;
+          width: 3rem;
+          height: 3rem;
+          border-radius: 50%;
+          color: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s;
+          z-index: 10;
+        }
+
+        .modal-close:hover {
+          background: rgb(220, 38, 38);
+          transform: scale(1.1);
+        }
+
+        .video-player {
+          width: 100%;
+          border-radius: 1.5rem 1.5rem 0 0;
+        }
+
+        .video-controls {
+          padding: 1.5rem;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .episode-title {
+          font-size: 1.25rem;
+          font-weight: 700;
+          margin-bottom: 1rem;
+          color: var(--text-primary);
+        }
+
+        .server-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+
+        .server-btn {
+          padding: 0.625rem 1.5rem;
+          border-radius: 0.5rem;
+          border: none;
+          background: var(--bg-tertiary);
+          color: var(--text-primary);
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s;
+        }
+
+        .server-btn.active {
+          background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+          color: white;
+        }
+
+        .server-btn:hover {
+          transform: translateY(-2px);
+        }
+
+        .anime-details {
+          padding: 2rem;
+        }
+
+        .details-grid {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 2rem;
+          margin-bottom: 2rem;
+        }
+
+        .details-poster {
+          width: 12rem;
+          height: 18rem;
+          border-radius: 1rem;
+          overflow: hidden;
+          box-shadow: 0 10px 30px var(--shadow-lg);
+        }
+
+        .details-poster img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .details-info h2 {
+          font-size: 2rem;
+          font-weight: 800;
+          margin-bottom: 0.5rem;
+          color: var(--text-primary);
+        }
+
+        .details-alt {
+          color: var(--text-secondary);
+          font-size: 1.125rem;
+          margin-bottom: 1rem;
+        }
+
+        .details-badges {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+
+        .badge {
+          padding: 0.5rem 1rem;
+          border-radius: 0.5rem;
+          font-size: 0.875rem;
+          font-weight: 600;
+        }
+
+        .badge-blue { background: var(--accent-primary); color: white; }
+        .badge-green { background: #10b981; color: white; }
+        .badge-yellow { background: #f59e0b; color: white; }
+
+        .details-synopsis {
+          color: var(--text-secondary);
+          line-height: 1.7;
+          margin-bottom: 1.5rem;
+        }
+
+        .details-meta {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .meta-item {
+          color: var(--text-secondary);
+        }
+
+        .meta-label {
+          font-weight: 600;
+          color: var(--text-primary);
+          margin-right: 0.5rem;
+        }
+
+        .genre-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .genre-tag {
+          padding: 0.375rem 0.875rem;
+          background: var(--bg-tertiary);
+          border-radius: 0.5rem;
+          font-size: 0.875rem;
+          color: var(--text-primary);
+          border: 1px solid var(--border);
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+
+        .episodes-section {
+          margin-top: 2rem;
+        }
+
+        .episodes-title {
+          font-size: 1.5rem;
+          font-weight: 700;
+          margin-bottom: 1rem;
+          color: var(--text-primary);
+        }
+
+        .episodes-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+          gap: 1rem;
+          max-height: 24rem;
+          overflow-y: auto;
+          padding: 0.5rem;
+        }
+
+        .episode-card {
+          background: var(--bg-tertiary);
+          padding: 1rem;
+          border-radius: 0.75rem;
+          border: 1px solid var(--border);
+          cursor: pointer;
+          transition: all 0.3s;
+          text-align: center;
+        }
+
+        .episode-card:hover {
+          background: var(--accent-primary);
+          color: white;
+          transform: translateY(-3px);
+          box-shadow: 0 6px 20px var(--shadow);
+        }
+
+        .episode-card.active {
+          border: 2px solid var(--accent-primary);
+        }
+
+        .episode-number {
+          font-weight: 700;
+          font-size: 0.875rem;
+          margin-bottom: 0.25rem;
+        }
+
+        .episode-title-small {
+          font-size: 0.75rem;
+          color: var(--text-secondary);
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .episode-card:hover .episode-title-small {
+          color: white;
+        }
+
+        .back-to-top {
+          position: fixed;
+          bottom: 2rem;
+          right: 2rem;
+          background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+          border: none;
+          width: 3.5rem;
+          height: 3.5rem;
+          border-radius: 50%;
+          color: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 6px 20px var(--shadow-lg);
+          transition: all 0.3s;
+          z-index: 10000;
+          animation: fadeIn 0.3s;
+        }
+
+        .back-to-top:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 10px 30px var(--shadow-lg);
+        }
+
+        .loading-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10002;
+        }
+
+        .spinner {
+          width: 4rem;
+          height: 4rem;
+          border: 4px solid var(--border);
+          border-top-color: var(--accent-primary);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        ::-webkit-scrollbar {
+          width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+          background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+          background: var(--accent-primary);
+          border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+          background: var(--accent-secondary);
+        }
+
+        @media (max-width: 768px) {
+          .menu-toggle {
+            display: block;
+          }
+
+          .nav-links {
+            display: none;
+          }
+
+          .spotlight-title {
+            font-size: 2rem;
+          }
+
+          .spotlight-desc {
+            font-size: 1rem;
+          }
+
+          .anime-grid {
+            grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+          }
+
+          .details-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .details-meta {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      {/* Theme Ripples */}
+      {ripples.map(ripple => (
+        <div
+          key={ripple.id}
+          className="theme-ripple"
+          style={{
+            left: ripple.x,
+            top: ripple.y,
+            transform: 'translate(-50%, -50%)'
+          }}
+        />
+      ))}
+
+      {/* Navigation */}
+      <nav className="navbar">
+        <div className="nav-container">
+          <div className="nav-brand" onClick={() => { setCurrentPage('home'); setShowAnimeModal(false); }}>
+            音楽Ko
+          </div>
+          <div className="nav-links">
+            <div className="search-container">
+              <input
+                type="text"
+                placeholder="Search anime..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch(searchQuery)}
+                className="search-input"
+              />
+              <Search className="search-icon" size={18} />
+            </div>
+            <button className="theme-toggle" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          </div>
+          <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
+            {menuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div style={{ paddingTop: '5rem' }}>
         {currentPage === 'home' && homeData && (
-          <div className="max-w-7xl mx-auto px-4 py-8">
-            {/* Spotlight Section */}
+          <>
+            {/* Spotlight */}
             {homeData.spotlight && homeData.spotlight.length > 0 && (
-              <div className="mb-12">
-                <div 
-                  className="relative rounded-2xl overflow-hidden h-96 group cursor-pointer"
-                  style={{
-                    backgroundImage: `url(${homeData.spotlight[0].poster})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  }}
-                  onClick={() => handleAnimeClick(homeData.spotlight[0])}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent">
-                    <div className="absolute bottom-0 left-0 p-8">
-                      <h2 className="text-4xl font-bold mb-2">{homeData.spotlight[0].title}</h2>
-                      <p className="text-gray-300 mb-4 max-w-2xl line-clamp-3">{homeData.spotlight[0].synopsis}</p>
-                      <div className="flex items-center space-x-4">
-                        <button className="bg-blue-600 hover:bg-blue-700 px-8 py-3 rounded-full flex items-center space-x-2 transition-all transform hover:scale-105">
-                          <Play className="w-5 h-5" />
-                          <span>Watch Now</span>
+              <section className="spotlight-section">
+                <div className="container">
+                  <div className="spotlight-card" onClick={() => handleAnimeClick(homeData.spotlight[0])}>
+                    <div className="spotlight-bg" style={{ backgroundImage: `url(${homeData.spotlight[0].poster})` }} />
+                    <div className="spotlight-overlay" />
+                    <div className="spotlight-content">
+                      <h1 className="spotlight-title">{homeData.spotlight[0].title}</h1>
+                      <p className="spotlight-desc">{homeData.spotlight[0].synopsis}</p>
+                      <div className="spotlight-actions">
+                        <button className="btn btn-primary">
+                          <Play size={20} />
+                          Watch Now
                         </button>
                         <button 
+                          className="btn-icon"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleBookmark(homeData.spotlight[0].id);
                           }}
-                          className={`p-3 rounded-full ${cardBg} ${hoverClass} transition-all`}
                         >
-                          <Bookmark className={`w-5 h-5 ${bookmarked.includes(homeData.spotlight[0].id) ? 'fill-current text-blue-500' : ''}`} />
+                          <Bookmark size={20} className={bookmarked.includes(homeData.spotlight[0].id) ? 'fill-current' : ''} />
                         </button>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
 
             {/* Search Results */}
             {searchResults.length > 0 && (
-              <Section title="Search Results" icon={<Search />}>
-                <AnimeGrid 
-                  animes={searchResults} 
-                  onAnimeClick={handleAnimeClick}
-                  liked={liked}
-                  bookmarked={bookmarked}
-                  toggleLike={toggleLike}
-                  toggleBookmark={toggleBookmark}
-                  theme={theme}
-                />
-              </Section>
+              <section className="section">
+                <div className="container">
+                  <div className="section-header">
+                    <Search size={28} style={{ color: 'var(--accent-primary)' }} />
+                    <h2 className="section-title">Search Results</h2>
+                  </div>
+                  <div className="anime-grid">
+                    {searchResults.slice(0, 12).map((anime, i) => (
+                      <AnimeCard 
+                        key={i} 
+                        anime={anime} 
+                        onClick={handleAnimeClick}
+                        liked={liked}
+                        bookmarked={bookmarked}
+                        onLike={toggleLike}
+                        onBookmark={toggleBookmark}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
             )}
 
             {/* Trending */}
             {homeData.trending && (
-              <Section title="Trending Now" icon={<TrendingUp />}>
-                <AnimeGrid 
-                  animes={homeData.trending} 
-                  onAnimeClick={handleAnimeClick}
-                  liked={liked}
-                  bookmarked={bookmarked}
-                  toggleLike={toggleLike}
-                  toggleBookmark={toggleBookmark}
-                  theme={theme}
-                />
-              </Section>
+              <section className="section">
+                <div className="container">
+                  <div className="section-header">
+                    <TrendingUp size={28} style={{ color: 'var(--accent-primary)' }} />
+                    <h2 className="section-title">Trending Now</h2>
+                  </div>
+                  <div className="anime-grid">
+                    {homeData.trending.slice(0, 12).map((anime, i) => (
+                      <AnimeCard 
+                        key={i} 
+                        anime={anime} 
+                        onClick={handleAnimeClick}
+                        liked={liked}
+                        bookmarked={bookmarked}
+                        onLike={toggleLike}
+                        onBookmark={toggleBookmark}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
             )}
 
             {/* Top Airing */}
             {homeData.topAiring && (
-              <Section title="Top Airing" icon={<Tv />}>
-                <AnimeGrid 
-                  animes={homeData.topAiring} 
-                  onAnimeClick={handleAnimeClick}
-                  liked={liked}
-                  bookmarked={bookmarked}
-                  toggleLike={toggleLike}
-                  toggleBookmark={toggleBookmark}
-                  theme={theme}
-                />
-              </Section>
+              <section className="section">
+                <div className="container">
+                  <div className="section-header">
+                    <Tv size={28} style={{ color: 'var(--accent-primary)' }} />
+                    <h2 className="section-title">Top Airing</h2>
+                  </div>
+                  <div className="anime-grid">
+                    {homeData.topAiring.slice(0, 12).map((anime, i) => (
+                      <AnimeCard 
+                        key={i} 
+                        anime={anime} 
+                        onClick={handleAnimeClick}
+                        liked={liked}
+                        bookmarked={bookmarked}
+                        onLike={toggleLike}
+                        onBookmark={toggleBookmark}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
             )}
 
             {/* Most Popular */}
             {homeData.mostPopular && (
-              <Section title="Most Popular" icon={<Star />}>
-                <AnimeGrid 
-                  animes={homeData.mostPopular} 
-                  onAnimeClick={handleAnimeClick}
-                  liked={liked}
-                  bookmarked={bookmarked}
-                  toggleLike={toggleLike}
-                  toggleBookmark={toggleBookmark}
-                  theme={theme}
-                />
-              </Section>
+              <section className="section">
+                <div className="container">
+                  <div className="section-header">
+                    <Star size={28} style={{ color: 'var(--accent-primary)' }} />
+                    <h2 className="section-title">Most Popular</h2>
+                  </div>
+                  <div className="anime-grid">
+                    {homeData.mostPopular.slice(0, 12).map((anime, i) => (
+                      <AnimeCard 
+                        key={i} 
+                        anime={anime} 
+                        onClick={handleAnimeClick}
+                        liked={liked}
+                        bookmarked={bookmarked}
+                        onLike={toggleLike}
+                        onBookmark={toggleBookmark}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
             )}
 
             {/* Latest Episodes */}
             {homeData.latestEpisode && (
-              <Section title="Latest Episodes" icon={<Clock />}>
-                <AnimeGrid 
-                  animes={homeData.latestEpisode} 
-                  onAnimeClick={handleAnimeClick}
-                  liked={liked}
-                  bookmarked={bookmarked}
-                  toggleLike={toggleLike}
-                  toggleBookmark={toggleBookmark}
-                  theme={theme}
-                />
-              </Section>
+              <section className="section">
+                <div className="container">
+                  <div className="section-header">
+                    <Clock size={28} style={{ color: 'var(--accent-primary)' }} />
+                    <h2 className="section-title">Latest Episodes</h2>
+                  </div>
+                  <div className="anime-grid">
+                    {homeData.latestEpisode.slice(0, 12).map((anime, i) => (
+                      <AnimeCard 
+                        key={i} 
+                        anime={anime} 
+                        onClick={handleAnimeClick}
+                        liked={liked}
+                        bookmarked={bookmarked}
+                        onLike={toggleLike}
+                        onBookmark={toggleBookmark}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
             )}
-          </div>
+          </>
         )}
 
         {/* Anime Detail Modal */}
         {showAnimeModal && animeDetails && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-75 animate-fadeIn">
-            <div className="min-h-screen px-4 py-8">
-              <div className={`max-w-6xl mx-auto ${cardBg} rounded-2xl shadow-2xl animate-slideUp`}>
-                <button
-                  onClick={() => {
-                    setShowAnimeModal(false);
-                    setCurrentPage('home');
-                    setStreamData(null);
-                  }}
-                  className="absolute top-4 right-4 p-2 rounded-full bg-red-600 hover:bg-red-700 transition-colors z-10"
-                >
-                  <X className="w-6 h-6 text-white" />
+          <div className="modal-overlay">
+            <div className="modal-container">
+              <div className="modal-content">
+                <button className="modal-close" onClick={() => {
+                  setShowAnimeModal(false);
+                  setCurrentPage('home');
+                  setStreamData(null);
+                }}>
+                  <X size={24} />
                 </button>
 
                 {/* Video Player */}
                 {streamData && (
-                  <div className="mb-8">
+                  <>
                     <video
                       ref={videoRef}
                       controls
-                      className="w-full rounded-t-2xl"
+                      className="video-player"
                       src={streamData.streamingLink.link.file}
                       crossOrigin="anonymous"
                     >
-                      <track
-                        kind="subtitles"
-                        src=""
-                        srcLang="en"
-                        label="English"
-                      />
+                      <track kind="subtitles" src="" srcLang="en" label="English" />
                     </video>
-                    <div className="p-4 border-b">
-                      <h3 className="text-xl font-bold mb-2">{currentEpisode?.title}</h3>
-                      <div className="flex space-x-4">
+                    <div className="video-controls">
+                      <h3 className="episode-title">{currentEpisode?.title}</h3>
+                      <div className="server-buttons">
                         <button
+                          className={`server-btn ${serverType === 'sub' ? 'active' : ''}`}
                           onClick={() => {
                             setServerType('sub');
                             playEpisode(currentEpisode);
                           }}
-                          className={`px-4 py-2 rounded-lg ${serverType === 'sub' ? 'bg-blue-600' : cardBg} transition-colors`}
                         >
                           SUB
                         </button>
                         <button
+                          className={`server-btn ${serverType === 'dub' ? 'active' : ''}`}
                           onClick={() => {
                             setServerType('dub');
                             playEpisode(currentEpisode);
                           }}
-                          className={`px-4 py-2 rounded-lg ${serverType === 'dub' ? 'bg-blue-600' : cardBg} transition-colors`}
                         >
                           DUB
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
-                <div className="p-8">
-                  {/* Anime Info */}
-                  <div className="flex gap-8 mb-8">
-                    <img
-                      src={animeDetails.poster}
-                      alt={animeDetails.title}
-                      className="w-48 h-72 object-cover rounded-lg shadow-lg"
-                    />
-                    <div className="flex-1">
-                      <h2 className="text-3xl font-bold mb-2">{animeDetails.title}</h2>
-                      <p className="text-gray-400 mb-4">{animeDetails.alternativeTitle}</p>
-                      <div className="flex items-center space-x-4 mb-4">
-                        <span className="px-3 py-1 bg-blue-600 rounded-full text-sm">{animeDetails.type}</span>
-                        <span className="px-3 py-1 bg-green-600 rounded-full text-sm">{animeDetails.rating}</span>
-                        <span className="flex items-center space-x-1">
-                          <Star className="w-4 h-4 fill-current text-yellow-500" />
-                          <span>{animeDetails.MAL_score}</span>
+                <div className="anime-details">
+                  <div className="details-grid">
+                    <div className="details-poster">
+                      <img src={animeDetails.poster} alt={animeDetails.title} />
+                    </div>
+                    <div className="details-info">
+                      <h2>{animeDetails.title}</h2>
+                      <p className="details-alt">{animeDetails.alternativeTitle}</p>
+                      <div className="details-badges">
+                        <span className="badge badge-blue">{animeDetails.type}</span>
+                        <span className="badge badge-green">{animeDetails.rating}</span>
+                        <span className="badge badge-yellow">
+                          <Star size={14} style={{ display: 'inline', marginRight: '0.25rem' }} />
+                          {animeDetails.MAL_score}
                         </span>
                       </div>
-                      <p className="text-gray-300 mb-4 leading-relaxed">{animeDetails.synopsis}</p>
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <span className="text-gray-400">Status:</span> {animeDetails.status}
+                      <p className="details-synopsis">{animeDetails.synopsis}</p>
+                      <div className="details-meta">
+                        <div className="meta-item">
+                          <span className="meta-label">Status:</span>
+                          {animeDetails.status}
                         </div>
-                        <div>
-                          <span className="text-gray-400">Duration:</span> {animeDetails.duration}
+                        <div className="meta-item">
+                          <span className="meta-label">Duration:</span>
+                          {animeDetails.duration}
                         </div>
-                        <div>
-                          <span className="text-gray-400">Studio:</span> {animeDetails.studios}
+                        <div className="meta-item">
+                          <span className="meta-label">Studio:</span>
+                          {animeDetails.studios}
                         </div>
-                        <div>
-                          <span className="text-gray-400">Premiered:</span> {animeDetails.premiered}
+                        <div className="meta-item">
+                          <span className="meta-label">Premiered:</span>
+                          {animeDetails.premiered}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="genre-tags">
                         {animeDetails.genres?.map((genre, i) => (
-                          <span key={i} className={`px-3 py-1 ${cardBg} rounded-full text-sm`}>
-                            {genre}
-                          </span>
+                          <span key={i} className="genre-tag">{genre}</span>
                         ))}
                       </div>
-                      <div className="flex space-x-4">
-                        <button 
-                          onClick={() => toggleLike(animeDetails.id)}
-                          className={`p-3 rounded-full ${hoverClass} transition-all hover:scale-110`}
-                        >
-                          <Heart className={`w-6 h-6 ${liked.includes(animeDetails.id) ? 'fill-current text-red-500' : ''}`} />
+                      <div className="action-buttons">
+                        <button className="btn-icon" onClick={() => toggleLike(animeDetails.id)}>
+                          <Heart size={20} className={liked.includes(animeDetails.id) ? 'fill-current' : ''} style={{ color: liked.includes(animeDetails.id) ? '#ef4444' : 'inherit' }} />
                         </button>
-                        <button 
-                          onClick={() => toggleBookmark(animeDetails.id)}
-                          className={`p-3 rounded-full ${hoverClass} transition-all hover:scale-110`}
-                        >
-                          <Bookmark className={`w-6 h-6 ${bookmarked.includes(animeDetails.id) ? 'fill-current text-blue-500' : ''}`} />
+                        <button className="btn-icon" onClick={() => toggleBookmark(animeDetails.id)}>
+                          <Bookmark size={20} className={bookmarked.includes(animeDetails.id) ? 'fill-current' : ''} style={{ color: bookmarked.includes(animeDetails.id) ? 'var(--accent-primary)' : 'inherit' }} />
                         </button>
                       </div>
                     </div>
@@ -464,18 +1244,18 @@ const Ongaku = () => {
 
                   {/* Episodes */}
                   {episodes.length > 0 && (
-                    <div>
-                      <h3 className="text-2xl font-bold mb-4">Episodes</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-96 overflow-y-auto">
+                    <div className="episodes-section">
+                      <h3 className="episodes-title">Episodes</h3>
+                      <div className="episodes-grid">
                         {episodes.map((ep, i) => (
-                          <button
+                          <div
                             key={i}
+                            className={`episode-card ${currentEpisode?.id === ep.id ? 'active' : ''}`}
                             onClick={() => playEpisode(ep)}
-                            className={`p-4 ${cardBg} ${hoverClass} rounded-lg transition-all hover:scale-105 hover:shadow-lg ${currentEpisode?.id === ep.id ? 'ring-2 ring-blue-500' : ''}`}
                           >
-                            <div className="text-sm font-medium">Episode {i + 1}</div>
-                            <div className="text-xs text-gray-400 mt-1 line-clamp-2">{ep.title}</div>
-                          </button>
+                            <div className="episode-number">Episode {i + 1}</div>
+                            <div className="episode-title-small">{ep.title}</div>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -487,130 +1267,44 @@ const Ongaku = () => {
         )}
       </div>
 
-      {/* Back to Top Button */}
+      {/* Back to Top */}
       {showBackToTop && (
-        <button
-          onClick={scrollToTop}
-          className="fixed bottom-8 right-8 p-4 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-all hover:scale-110 animate-fadeIn z-40"
-        >
-          <ChevronUp className="w-6 h-6" />
+        <button className="back-to-top" onClick={scrollToTop}>
+          <ChevronUp size={24} />
         </button>
       )}
 
-      {/* Loading Overlay */}
+      {/* Loading */}
       {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="loading-overlay">
+          <div className="spinner" />
         </div>
       )}
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from { 
-            opacity: 0;
-            transform: translateY(50px);
-          }
-          to { 
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        .animate-slideUp {
-          animation: slideUp 0.4s ease-out;
-        }
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .line-clamp-3 {
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-      `}</style>
     </div>
   );
 };
 
-const Section = ({ title, icon, children }) => (
-  <div className="mb-12">
-    <div className="flex items-center space-x-3 mb-6">
-      {icon}
-      <h2 className="text-2xl font-bold">{title}</h2>
+const AnimeCard = ({ anime, onClick, liked, bookmarked, onLike, onBookmark }) => (
+  <div className="anime-card" onClick={() => onClick(anime)}>
+    <div className="anime-poster">
+      <img src={anime.poster} alt={anime.title} />
+      {anime.episodes && (
+        <span className="anime-badge">EP {anime.episodes.eps || anime.episodes.sub}</span>
+      )}
+      <div className="anime-overlay">
+        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); onLike(anime.id); }}>
+          <Heart size={16} className={liked.includes(anime.id) ? 'fill-current' : ''} style={{ color: liked.includes(anime.id) ? '#ef4444' : 'white' }} />
+        </button>
+        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); onBookmark(anime.id); }}>
+          <Bookmark size={16} className={bookmarked.includes(anime.id) ? 'fill-current' : ''} style={{ color: bookmarked.includes(anime.id) ? '#5eb3ff' : 'white' }} />
+        </button>
+      </div>
     </div>
-    {children}
+    <div className="anime-info">
+      <h3 className="anime-title">{anime.title}</h3>
+      {anime.type && <p className="anime-meta">{anime.type}</p>}
+    </div>
   </div>
 );
-
-const AnimeGrid = ({ animes, onAnimeClick, liked, bookmarked, toggleLike, toggleBookmark, theme }) => {
-  const cardBg = theme === 'dark' ? 'bg-gray-800' : 'bg-white';
-  const hoverClass = theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
-  
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-      {animes.slice(0, 12).map((anime, i) => (
-        <div
-          key={i}
-          className={`${cardBg} rounded-lg overflow-hidden shadow-lg cursor-pointer transition-all hover:scale-105 hover:shadow-2xl group animate-fadeIn`}
-          style={{ animationDelay: `${i * 0.05}s` }}
-          onClick={() => onAnimeClick(anime)}
-        >
-          <div className="relative">
-            <img
-              src={anime.poster}
-              alt={anime.title}
-              className="w-full h-72 object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="absolute bottom-2 left-2 right-2 flex justify-between">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleLike(anime.id);
-                  }}
-                  className="p-2 bg-black bg-opacity-50 rounded-full hover:bg-opacity-75 transition-all"
-                >
-                  <Heart className={`w-4 h-4 ${liked.includes(anime.id) ? 'fill-current text-red-500' : ''}`} />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleBookmark(anime.id);
-                  }}
-                  className="p-2 bg-black bg-opacity-50 rounded-full hover:bg-opacity-75 transition-all"
-                >
-                  <Bookmark className={`w-4 h-4 ${bookmarked.includes(anime.id) ? 'fill-current text-blue-500' : ''}`} />
-                </button>
-              </div>
-            </div>
-            {anime.episodes && (
-              <div className="absolute top-2 left-2">
-                <span className="px-2 py-1 bg-blue-600 rounded text-xs font-bold">
-                  EP {anime.episodes.eps || anime.episodes.sub}
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="p-3">
-            <h3 className="font-semibold text-sm line-clamp-2 mb-1">{anime.title}</h3>
-            {anime.type && (
-              <p className="text-xs text-gray-400">{anime.type}</p>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 export default Ongaku;
