@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp } from 'lucide-react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, X } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
@@ -11,11 +11,18 @@ const Ongaku = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedAnime, setSelectedAnime] = useState(null);
+  const [animeDetails, setAnimeDetails] = useState(null);
+  const [episodes, setEpisodes] = useState([]);
+  const [selectedEpisode, setSelectedEpisode] = useState(null);
+  const [servers, setServers] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [selectedServer, setSelectedServer] = useState('HD-1');
+  const [streamType, setStreamType] = useState('sub');
   const [likedAnimes, setLikedAnimes] = useState([]);
   const [bookmarkedAnimes, setBookmarkedAnimes] = useState([]);
   const [activeView, setActiveView] = useState('home');
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const toggleRef = useRef(null);
+  const videoRef = useRef(null);
+  const hlsRef = useRef(null);
 
   useEffect(() => {
     const liked = JSON.parse(localStorage.getItem('likedAnimes') || '[]');
@@ -33,6 +40,37 @@ const Ongaku = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (selectedAnime && activeView === 'details') {
+      fetchAnimeDetails(selectedAnime.id);
+      fetchEpisodes(selectedAnime.id);
+    }
+  }, [selectedAnime, activeView]);
+
+  useEffect(() => {
+    if (selectedEpisode) {
+      fetchServers(selectedEpisode.id);
+    }
+  }, [selectedEpisode]);
+
+  useEffect(() => {
+    if (servers && selectedServer && selectedEpisode) {
+      fetchStreamUrl(selectedEpisode.id, selectedServer, streamType);
+    }
+  }, [servers, selectedServer, streamType]);
+
+  useEffect(() => {
+    if (streamUrl && videoRef.current) {
+      loadVideo(streamUrl);
+    }
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [streamUrl]);
+
   const fetchHomeData = async () => {
     try {
       const res = await fetch(`${API_BASE}/home`);
@@ -44,6 +82,102 @@ const Ongaku = () => {
       console.error('Error fetching home data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAnimeDetails = async (animeId) => {
+    try {
+      const res = await fetch(`${API_BASE}/anime/${animeId}`);
+      const data = await res.json();
+      if (data.success) {
+        setAnimeDetails(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching anime details:', err);
+    }
+  };
+
+  const fetchEpisodes = async (animeId) => {
+    try {
+      const res = await fetch(`${API_BASE}/episodes/${animeId}`);
+      const data = await res.json();
+      if (data.success) {
+        setEpisodes(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching episodes:', err);
+    }
+  };
+
+  const fetchServers = async (episodeId) => {
+    try {
+      const cleanEpisodeId = episodeId.replace('/watch/', '');
+      const res = await fetch(`${API_BASE}/servers?id=${cleanEpisodeId}`);
+      const data = await res.json();
+      if (data.success) {
+        setServers(data.data);
+        if (data.data.sub && data.data.sub.length > 0) {
+          setSelectedServer(data.data.sub[0].name);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching servers:', err);
+    }
+  };
+
+  const fetchStreamUrl = async (episodeId, server, type) => {
+    try {
+      const cleanEpisodeId = episodeId.replace('/watch/', '');
+      const res = await fetch(`${API_BASE}/stream?id=${cleanEpisodeId}&server=${server}&type=${type}`);
+      const data = await res.json();
+      if (data.success && data.data.streamingLink) {
+        setStreamUrl(data.data.streamingLink);
+      }
+    } catch (err) {
+      console.error('Error fetching stream URL:', err);
+    }
+  };
+
+  const loadVideo = (streamData) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+    }
+
+    const videoSrc = streamData.link?.file || streamData.sources?.[0]?.file;
+    
+    if (!videoSrc) {
+      console.error('No video source found');
+      return;
+    }
+
+    if (window.Hls && window.Hls.isSupported()) {
+      const hls = new window.Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90
+      });
+      
+      hlsRef.current = hls;
+      hls.loadSource(videoSrc);
+      hls.attachMedia(video);
+      
+      hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(e => console.log('Autoplay prevented:', e));
+      });
+
+      hls.on(window.Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          console.error('HLS Error:', data);
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = videoSrc;
+      video.addEventListener('loadedmetadata', () => {
+        video.play().catch(e => console.log('Autoplay prevented:', e));
+      });
     }
   };
 
@@ -66,18 +200,7 @@ const Ongaku = () => {
   };
 
   const toggleTheme = () => {
-    setIsTransitioning(true);
-    const rect = toggleRef.current?.getBoundingClientRect();
-    const x = rect?.left + rect?.width / 2;
-    const y = rect?.top + rect?.height / 2;
-    
-    document.documentElement.style.setProperty('--ripple-x', `${x}px`);
-    document.documentElement.style.setProperty('--ripple-y', `${y}px`);
-    
-    setTimeout(() => {
-      setDarkMode(!darkMode);
-      setTimeout(() => setIsTransitioning(false), 800);
-    }, 50);
+    setDarkMode(!darkMode);
   };
 
   const toggleLike = (anime) => {
@@ -98,6 +221,13 @@ const Ongaku = () => {
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleEpisodeSelect = (episode) => {
+    setSelectedEpisode(episode);
+    setActiveView('watch');
+    setServers(null);
+    setStreamUrl(null);
   };
 
   const AnimeCard = ({ anime, index }) => (
@@ -165,8 +295,142 @@ const Ongaku = () => {
     </div>
   );
 
+  const AnimeDetailsView = () => (
+    <div className="anime-details">
+      <button className="back-btn" onClick={() => setActiveView('home')}>
+        <ArrowLeft size={20} /> Back
+      </button>
+      
+      {animeDetails && (
+        <div className="details-header">
+          <img src={animeDetails.poster} alt={animeDetails.title} className="details-poster" />
+          <div className="details-info">
+            <h1>{animeDetails.title}</h1>
+            <p className="alternative-title">{animeDetails.alternativeTitle}</p>
+            <div className="details-meta">
+              <span className="rating">{animeDetails.rating}</span>
+              <span>{animeDetails.type}</span>
+              <span>{animeDetails.status}</span>
+              <span><Star size={14} /> {animeDetails.MAL_score}</span>
+            </div>
+            <p className="synopsis">{animeDetails.synopsis}</p>
+            <div className="genres">
+              {animeDetails.genres?.map((genre, i) => (
+                <span key={i} className="genre-tag">{genre}</span>
+              ))}
+            </div>
+            <div className="action-buttons">
+              <button 
+                className={`action-btn ${likedAnimes.some(a => a.id === animeDetails.id) ? 'active' : ''}`}
+                onClick={() => toggleLike(animeDetails)}
+              >
+                <Heart size={20} /> {likedAnimes.some(a => a.id === animeDetails.id) ? 'Liked' : 'Like'}
+              </button>
+              <button 
+                className={`action-btn ${bookmarkedAnimes.some(a => a.id === animeDetails.id) ? 'active' : ''}`}
+                onClick={() => toggleBookmark(animeDetails)}
+              >
+                <Bookmark size={20} /> {bookmarkedAnimes.some(a => a.id === animeDetails.id) ? 'Bookmarked' : 'Bookmark'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="episodes-section">
+        <h2>Episodes</h2>
+        <div className="episodes-grid">
+          {episodes.map((ep, i) => (
+            <div 
+              key={i} 
+              className="episode-card"
+              onClick={() => handleEpisodeSelect(ep)}
+            >
+              <Play size={16} />
+              <span>Episode {i + 1}</span>
+              {ep.title && <small>{ep.title}</small>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const WatchView = () => (
+    <div className="watch-container">
+      <button className="back-btn" onClick={() => setActiveView('details')}>
+        <ArrowLeft size={20} /> Back to Episodes
+      </button>
+
+      <div className="video-section">
+        <video 
+          ref={videoRef}
+          controls
+          className="video-player"
+          poster={selectedAnime?.poster}
+        />
+      </div>
+
+      {servers && (
+        <div className="server-controls">
+          <div className="control-group">
+            <label>Type:</label>
+            <div className="button-group">
+              <button 
+                className={streamType === 'sub' ? 'active' : ''}
+                onClick={() => setStreamType('sub')}
+                disabled={!servers.sub || servers.sub.length === 0}
+              >
+                SUB
+              </button>
+              <button 
+                className={streamType === 'dub' ? 'active' : ''}
+                onClick={() => setStreamType('dub')}
+                disabled={!servers.dub || servers.dub.length === 0}
+              >
+                DUB
+              </button>
+            </div>
+          </div>
+
+          <div className="control-group">
+            <label>Server:</label>
+            <div className="button-group">
+              {servers[streamType]?.map((server) => (
+                <button
+                  key={server.name}
+                  className={selectedServer === server.name ? 'active' : ''}
+                  onClick={() => setSelectedServer(server.name)}
+                >
+                  {server.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="episodes-list-compact">
+        <h3>Episodes</h3>
+        <div className="episodes-compact-grid">
+          {episodes.map((ep, i) => (
+            <button
+              key={i}
+              className={`episode-btn ${selectedEpisode?.id === ep.id ? 'active' : ''}`}
+              onClick={() => handleEpisodeSelect(ep)}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className={`app ${darkMode ? 'dark' : 'light'} ${isTransitioning ? 'transitioning' : ''}`}>
+    <div className={`app ${darkMode ? 'dark' : 'light'}`}>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
+      
       <nav className="navbar">
         <div className="nav-container">
           <h1 className="logo" onClick={() => setActiveView('home')}>AnimeStream</h1>
@@ -179,7 +443,9 @@ const Ongaku = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             />
-            <button onClick={handleSearch} className="search-btn">Search</button>
+            <button onClick={handleSearch} className="search-btn">
+              <Search size={18} />
+            </button>
           </div>
           <div className="nav-actions">
             <button onClick={() => setActiveView('liked')} className="nav-btn">
@@ -190,7 +456,7 @@ const Ongaku = () => {
               <Bookmark size={22} />
               {bookmarkedAnimes.length > 0 && <span className="badge">{bookmarkedAnimes.length}</span>}
             </button>
-            <button ref={toggleRef} onClick={toggleTheme} className="theme-toggle">
+            <button onClick={toggleTheme} className="theme-toggle">
               {darkMode ? <Sun size={22} /> : <Moon size={22} />}
             </button>
           </div>
@@ -277,6 +543,9 @@ const Ongaku = () => {
                 )}
               </section>
             )}
+
+            {activeView === 'details' && <AnimeDetailsView />}
+            {activeView === 'watch' && <WatchView />}
           </>
         )}
       </main>
@@ -308,36 +577,6 @@ const Ongaku = () => {
         .app.light {
           background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
           color: #1a1a2e;
-        }
-
-        .app.transitioning::before {
-          content: '';
-          position: fixed;
-          top: var(--ripple-y);
-          left: var(--ripple-x);
-          width: 0;
-          height: 0;
-          border-radius: 50%;
-          background: var(--ripple-bg);
-          transform: translate(-50%, -50%);
-          animation: ripple 0.8s ease-out forwards;
-          pointer-events: none;
-          z-index: 9999;
-        }
-
-        .dark.transitioning::before {
-          --ripple-bg: #f5f7fa;
-        }
-
-        .light.transitioning::before {
-          --ripple-bg: #0f0f1e;
-        }
-
-        @keyframes ripple {
-          to {
-            width: 300vmax;
-            height: 300vmax;
-          }
         }
 
         .navbar {
@@ -418,19 +657,28 @@ const Ongaku = () => {
         }
 
         .search-btn {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
+          background: transparent;
+          color: inherit;
           border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
+          padding: 0.5rem;
+          border-radius: 50%;
           cursor: pointer;
-          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           transition: all 0.3s ease;
         }
 
         .search-btn:hover {
-          transform: scale(1.05);
-          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+          transform: scale(1.1);
+        }
+
+        .dark .search-btn:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .light .search-btn:hover {
+          background: rgba(0, 0, 0, 0.1);
         }
 
         .nav-actions {
@@ -690,6 +938,324 @@ const Ongaku = () => {
           opacity: 0.7;
         }
 
+        .anime-details {
+          animation: fadeInUp 0.6s ease-out;
+        }
+
+        .back-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          background: transparent;
+          border: 1px solid rgba(102, 126, 234, 0.5);
+          color: inherit;
+          padding: 0.75rem 1.5rem;
+          border-radius: 50px;
+          cursor: pointer;
+          margin-bottom: 2rem;
+          transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+          background: rgba(102, 126, 234, 0.1);
+          transform: translateX(-5px);
+        }
+
+        .details-header {
+          display: grid;
+          grid-template-columns: 300px 1fr;
+          gap: 2rem;
+          margin-bottom: 3rem;
+        }
+
+        .details-poster {
+          width: 100%;
+          border-radius: 12px;
+          box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .details-info h1 {
+          font-size: 2.5rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .alternative-title {
+          font-size: 1.2rem;
+          opacity: 0.7;
+          margin-bottom: 1rem;
+        }
+
+        .details-meta {
+          display: flex;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+          flex-wrap: wrap;
+        }
+
+        .details-meta span {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+        }
+
+        .dark .details-meta span {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .light .details-meta span {
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .rating {
+          background: #ef4444 !important;
+          color: white !important;
+          font-weight: bold;
+        }
+
+        .synopsis {
+          line-height: 1.8;
+          margin-bottom: 1.5rem;
+        }
+
+        .genres {
+          display: flex;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+          margin-bottom: 1.5rem;
+        }
+
+        .genre-tag {
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          font-size: 0.9rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+
+        .action-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.5rem;
+          border-radius: 50px;
+          border: 2px solid rgba(102, 126, 234, 0.5);
+          background: transparent;
+          color: inherit;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+          background: rgba(102, 126, 234, 0.1);
+          transform: translateY(-2px);
+        }
+
+        .action-btn.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-color: transparent;
+        }
+
+        .episodes-section {
+          margin-top: 3rem;
+        }
+
+        .episodes-section h2 {
+          font-size: 1.8rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .episodes-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 1rem;
+        }
+
+        .episode-card {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 1rem;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .dark .episode-card {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light .episode-card {
+          background: rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .episode-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .dark .episode-card:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .light .episode-card:hover {
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .episode-card small {
+          display: block;
+          opacity: 0.7;
+          font-size: 0.85rem;
+          margin-top: 0.25rem;
+        }
+
+        .watch-container {
+          animation: fadeInUp 0.6s ease-out;
+        }
+
+        .video-section {
+          margin-bottom: 2rem;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-player {
+          width: 100%;
+          aspect-ratio: 16/9;
+          background: #000;
+        }
+
+        .server-controls {
+          display: flex;
+          gap: 2rem;
+          margin-bottom: 2rem;
+          padding: 1.5rem;
+          border-radius: 12px;
+        }
+
+        .dark .server-controls {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light .server-controls {
+          background: rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .control-group {
+          flex: 1;
+        }
+
+        .control-group label {
+          display: block;
+          margin-bottom: 0.75rem;
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+
+        .button-group {
+          display: flex;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+
+        .button-group button {
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          font-weight: 500;
+        }
+
+        .dark .button-group button {
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+        }
+
+        .light .button-group button {
+          background: rgba(0, 0, 0, 0.1);
+          color: #1a1a2e;
+        }
+
+        .button-group button:hover:not(:disabled) {
+          transform: translateY(-2px);
+        }
+
+        .button-group button.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+
+        .button-group button:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+        }
+
+        .episodes-list-compact {
+          padding: 1.5rem;
+          border-radius: 12px;
+        }
+
+        .dark .episodes-list-compact {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light .episodes-list-compact {
+          background: rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .episodes-list-compact h3 {
+          margin-bottom: 1rem;
+        }
+
+        .episodes-compact-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+          gap: 0.5rem;
+        }
+
+        .episode-btn {
+          padding: 0.75rem;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.3s ease;
+        }
+
+        .dark .episode-btn {
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+        }
+
+        .light .episode-btn {
+          background: rgba(0, 0, 0, 0.1);
+          color: #1a1a2e;
+        }
+
+        .episode-btn:hover {
+          transform: scale(1.05);
+        }
+
+        .episode-btn.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+
         .back-to-top {
           position: fixed;
           bottom: 2rem;
@@ -762,6 +1328,24 @@ const Ongaku = () => {
           .anime-grid {
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 1rem;
+          }
+
+          .details-header {
+            grid-template-columns: 1fr;
+          }
+
+          .details-poster {
+            max-width: 300px;
+            margin: 0 auto;
+          }
+
+          .server-controls {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .episodes-compact-grid {
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
           }
         }
       `}</style>
