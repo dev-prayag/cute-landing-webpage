@@ -52,57 +52,69 @@ const Ongaku = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [currentSpotlightIndex, setCurrentSpotlightIndex] = useState(0);
   const [autoScrollInterval, setAutoScrollInterval] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const iframeRef = useRef(null);
   const spotlightRef = useRef(null);
 
-  // Initialize from URL
+  // Initialize from URL on first load
   useEffect(() => {
-    const path = window.location.pathname;
-    
-    if (path === '/' || path === '/home') {
-      setActiveView('home');
-    } else if (path.startsWith('/anime/')) {
-      const pathParts = path.split('/');
-      if (pathParts.length >= 4) {
-        const animeId = pathParts[2];
-        const epNumber = pathParts[3];
-        // Fetch anime details and set episode
-        fetchAnimeDetails(animeId).then(() => {
-          fetchEpisodes(animeId).then(() => {
-            const episodeIndex = parseInt(epNumber) - 1;
-            if (episodeIndex >= 0 && episodeIndex < episodes.length) {
-              handleEpisodeSelect(episodes[episodeIndex], episodeIndex);
+    if (!isInitialized) {
+      const path = window.location.pathname;
+      
+      if (path === '/' || path === '/home') {
+        setActiveView('home');
+      } else if (path.startsWith('/anime/')) {
+        const pathParts = path.split('/');
+        if (pathParts.length >= 4) {
+          const animeId = pathParts[2];
+          const epNumber = pathParts[3];
+          // Fetch anime details and set episode
+          fetchAnimeDetails(animeId).then((animeData) => {
+            if (animeData) {
+              setSelectedAnime(animeData);
+              fetchEpisodes(animeId).then((epData) => {
+                if (epData && epData.length > 0) {
+                  const episodeIndex = parseInt(epNumber) - 1;
+                  if (episodeIndex >= 0 && episodeIndex < epData.length) {
+                    handleEpisodeSelect(epData[episodeIndex], episodeIndex);
+                  }
+                }
+              });
             }
           });
-        });
+        }
+      } else if (path === '/liked') {
+        setActiveView('liked');
+      } else if (path === '/bookmarked') {
+        setActiveView('bookmarked');
       }
-    } else if (path === '/liked') {
-      setActiveView('liked');
-    } else if (path === '/bookmarked') {
-      setActiveView('bookmarked');
+      
+      setIsInitialized(true);
     }
-  }, []);
+  }, [isInitialized]);
 
-  // Update URL when view changes
+  // Update URL when view changes, but only after initialization
   useEffect(() => {
-    const path = window.location.pathname;
-    let newPath = '/';
-    
-    if (activeView === 'home') {
-      newPath = '/home';
-    } else if (activeView === 'watch' && selectedAnime && selectedEpisode) {
-      const epNumber = currentEpisodeIndex + 1;
-      newPath = `/anime/${selectedAnime.id}/${epNumber}`;
-    } else if (activeView === 'liked') {
-      newPath = '/liked';
-    } else if (activeView === 'bookmarked') {
-      newPath = '/bookmarked';
+    if (isInitialized) {
+      const path = window.location.pathname;
+      let newPath = '/';
+      
+      if (activeView === 'home') {
+        newPath = '/home';
+      } else if (activeView === 'watch' && selectedAnime && selectedEpisode) {
+        const epNumber = currentEpisodeIndex + 1;
+        newPath = `/anime/${selectedAnime.id}/${epNumber}`;
+      } else if (activeView === 'liked') {
+        newPath = '/liked';
+      } else if (activeView === 'bookmarked') {
+        newPath = '/bookmarked';
+      }
+      
+      if (path !== newPath) {
+        window.history.pushState(null, null, newPath);
+      }
     }
-    
-    if (path !== newPath) {
-      window.history.pushState(null, null, newPath);
-    }
-  }, [activeView, selectedAnime, selectedEpisode, currentEpisodeIndex]);
+  }, [activeView, selectedAnime, selectedEpisode, currentEpisodeIndex, isInitialized]);
 
   useEffect(() => {
     const liked = JSON.parse(localStorage.getItem('likedAnimes') || '[]');
@@ -161,6 +173,7 @@ const Ongaku = () => {
       return data.data;
     } catch (err) {
       console.error('Error fetching anime details:', err);
+      return null;
     }
   };
 
@@ -171,6 +184,7 @@ const Ongaku = () => {
       return data.data;
     } catch (err) {
       console.error('Error fetching episodes:', err);
+      return [];
     }
   };
 
@@ -638,7 +652,7 @@ const Ongaku = () => {
       <main className="main-content">
         {loading ? (
           <div className="loader-container">
-            <img src="/assets/loader.gif" alt="Loading..." className="loader" />
+            <img src="./assets/loader.gif" alt="Loading..." className="loader" />
           </div>
         ) : (
           <>
@@ -766,6 +780,8 @@ const Ongaku = () => {
         )}
       </main>
 
+      <div className="footer-separator"></div>
+      
       <footer className="footer">
         <p>Made with love by prayag.cake</p>
       </footer>
@@ -792,13 +808,13 @@ const Ongaku = () => {
         }
 
         .app.dark {
-          background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+          background: #121212;
           color: #ffffff;
         }
 
         .app.light {
-          background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
-          color: #1a1a2e;
+          background: #f5f5f5;
+          color: #121212;
         }
 
         .navbar {
@@ -811,13 +827,13 @@ const Ongaku = () => {
         }
 
         .dark .navbar {
-          background: rgba(15, 15, 30, 0.8);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          background: #1e1e1e;
+          border-bottom: 1px solid #333333;
         }
 
         .light .navbar {
-          background: rgba(255, 255, 255, 0.8);
-          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+          background: #ffffff;
+          border-bottom: 1px solid #e0e0e0;
         }
 
         .nav-container {
@@ -856,13 +872,13 @@ const Ongaku = () => {
         }
 
         .dark .search-bar {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: #2a2a2a;
+          border: 1px solid #444444;
         }
 
         .light .search-bar {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: #f0f0f0;
+          border: 1px solid #d0d0d0;
         }
 
         .search-bar:focus-within {
@@ -1303,11 +1319,11 @@ const Ongaku = () => {
         }
 
         .dark .details-meta span {
-          background: rgba(255, 255, 255, 0.1);
+          background: #2a2a2a;
         }
 
         .light .details-meta span {
-          background: rgba(0, 0, 0, 0.1);
+          background: #e0e0e0;
         }
 
         .rating {
@@ -1408,13 +1424,13 @@ const Ongaku = () => {
         }
 
         .dark .episode-card {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: #2a2a2a;
+          border: 1px solid #444444;
         }
 
         .light .episode-card {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: #e0e0e0;
+          border: 1px solid #d0d0d0;
         }
 
         .episode-card:hover {
@@ -1423,11 +1439,11 @@ const Ongaku = () => {
         }
 
         .dark .episode-card:hover {
-          background: rgba(255, 255, 255, 0.1);
+          background: #333333;
         }
 
         .light .episode-card:hover {
-          background: rgba(0, 0, 0, 0.1);
+          background: #d0d0d0;
         }
 
         .episode-info {
@@ -1544,14 +1560,14 @@ const Ongaku = () => {
         }
 
         .dark .player-info-bar {
-          background: rgba(15, 15, 30, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: #2a2a2a;
+          border: 1px solid #444444;
           border-bottom: none;
         }
 
         .light .player-info-bar {
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: #e0e0e0;
+          border: 1px solid #d0d0d0;
           border-bottom: none;
         }
 
@@ -1612,13 +1628,13 @@ const Ongaku = () => {
         }
 
         .dark .player-settings-section {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: #2a2a2a;
+          border: 1px solid #444444;
         }
 
         .light .player-settings-section {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: #e0e0e0;
+          border: 1px solid #d0d0d0;
         }
 
         .settings-container {
@@ -1648,13 +1664,13 @@ const Ongaku = () => {
         }
 
         .dark .settings-btn {
-          background: rgba(255, 255, 255, 0.1);
+          background: #333333;
           color: white;
         }
 
         .light .settings-btn {
-          background: rgba(0, 0, 0, 0.1);
-          color: #1a1a2e;
+          background: #d0d0d0;
+          color: #121212;
         }
 
         .settings-btn.active {
@@ -1680,13 +1696,13 @@ const Ongaku = () => {
         }
 
         .dark .episodes-list-compact {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: #2a2a2a;
+          border: 1px solid #444444;
         }
 
         .light .episodes-list-compact {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: #e0e0e0;
+          border: 1px solid #d0d0d0;
         }
 
         .episodes-list-compact h3 {
@@ -1727,15 +1743,15 @@ const Ongaku = () => {
         }
 
         .dark .episode-btn {
-          background: rgba(255, 255, 255, 0.1);
+          background: #333333;
           color: white;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid #444444;
         }
 
         .light .episode-btn {
-          background: rgba(0, 0, 0, 0.1);
-          color: #1a1a2e;
-          border: 1px solid rgba(0, 0, 0, 0.1);
+          background: #d0d0d0;
+          color: #121212;
+          border: 1px solid #c0c0c0;
         }
 
         .episode-btn:hover {
@@ -1746,6 +1762,12 @@ const Ongaku = () => {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border-color: transparent;
+        }
+
+        .footer-separator {
+          height: 1px;
+          background: linear-gradient(to right, transparent, rgba(102, 126, 234, 0.5), transparent);
+          margin: 2rem 0;
         }
 
         .footer {
@@ -1864,6 +1886,15 @@ const Ongaku = () => {
 
           .settings-container {
             max-width: 100%;
+          }
+
+          .footer-separator {
+            margin: 1rem 0;
+          }
+
+          .footer {
+            font-size: 0.8rem;
+            padding: 0.5rem;
           }
         }
       `}</style>
