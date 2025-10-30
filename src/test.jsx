@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack, User, Globe } from 'lucide-react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
@@ -49,7 +49,6 @@ const Ongaku = () => {
   const [activeView, setActiveView] = useState('home');
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [language, setLanguage] = useState('en');
   const iframeRef = useRef(null);
 
   useEffect(() => {
@@ -307,30 +306,11 @@ const Ongaku = () => {
           
           <div className="video-overlay">
             <div className="overlay-top">
-              <div className="breadcrumb">
-                <span>Home</span>
-                <span>/</span>
-                <span>MOVIE</span>
-                <span>/</span>
-                <span>{animeDetails?.title || 'Anime'}</span>
-                <span>/</span>
-                <span>Episode {currentEpisodeIndex + 1}</span>
+              <div className="episode-badge">
+                {animeDetails?.title || 'Anime'}/Episode {currentEpisodeIndex + 1}
+                {selectedEpisode?.isFiller && <span className="filler-tag">Filler</span>}
               </div>
               <div className="overlay-controls">
-                <button 
-                  onClick={() => toggleLike(animeDetails)}
-                  className={likedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
-                  title="Like"
-                >
-                  <Heart size={18} />
-                </button>
-                <button 
-                  onClick={() => toggleBookmark(animeDetails)}
-                  className={bookmarkedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
-                  title="Bookmark"
-                >
-                  <Bookmark size={18} />
-                </button>
                 <button onClick={() => setIsTheaterMode(!isTheaterMode)} title="Theater Mode">
                   <Maximize size={18} />
                 </button>
@@ -341,59 +321,73 @@ const Ongaku = () => {
             </div>
           </div>
         </div>
+        
+        {/* Player info bar below the video */}
+        <div className="player-info-bar">
+          <div className="episode-info">
+            <span className="episode-number">{animeDetails?.title || 'Anime'}/Episode {currentEpisodeIndex + 1}</span>
+            <span className="episode-title">{selectedEpisode?.title}</span>
+          </div>
+          <div className="player-actions">
+            <button 
+              onClick={() => toggleLike(animeDetails)}
+              className={likedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
+              title="Like"
+            >
+              <Heart size={18} />
+            </button>
+            <button 
+              onClick={() => toggleBookmark(animeDetails)}
+              className={bookmarkedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
+              title="Bookmark"
+            >
+              <Bookmark size={18} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="player-controls">
-        <div className="control-section">
-          <div className="control-label">Server</div>
-          <div className="button-group">
-            <button
-              className={server === 'vidWish' ? 'active' : ''}
-              onClick={() => setServer('vidWish')}
-            >
-              VidWish
-            </button>
-            <button
-              className={server === 'megaPlay' ? 'active' : ''}
-              onClick={() => setServer('megaPlay')}
-            >
-              MegaPlay
-            </button>
-          </div>
-        </div>
-
-        <div className="control-section">
-          <div className="control-label">Audio</div>
-          <div className="button-group">
-            <button
-              className={streamType === 'sub' ? 'active' : ''}
+      {/* Player settings section matching the screenshot */}
+      <div className="player-settings">
+        <div className="settings-row">
+          <div className="settings-item">
+            <button 
+              className={`settings-btn ${streamType === 'sub' ? 'active' : ''}`}
               onClick={() => setStreamType('sub')}
             >
-              SUB
+              cc Hard Sub
             </button>
-            <button
-              className={streamType === 'dub' ? 'active' : ''}
+            <button 
+              className={`settings-btn ${streamType === 'dub' ? 'active' : ''}`}
               onClick={() => setStreamType('dub')}
             >
-              DUB
+              Dub
             </button>
           </div>
         </div>
-
-        <div className="control-section">
-          <div className="control-label">Episode</div>
-          <div className="button-group">
-            {currentEpisodeIndex > 0 && (
-              <button onClick={() => changeEpisode('prev')} className="nav-btn">
-                <SkipBack size={16} /> Previous
-              </button>
-            )}
-            {currentEpisodeIndex < episodes.length - 1 && (
-              <button onClick={() => changeEpisode('next')} className="nav-btn primary">
-                Next <SkipForward size={16} />
-              </button>
-            )}
+        
+        <div className="settings-row">
+          <div className="settings-item">
+            <button 
+              className={`settings-btn ${server === 'vidWish' ? 'active' : ''}`}
+              onClick={() => setServer('vidWish')}
+            >
+              Server 1
+            </button>
+            <button 
+              className={`settings-btn ${server === 'megaPlay' ? 'active' : ''}`}
+              onClick={() => setServer('megaPlay')}
+            >
+              Server 2
+            </button>
           </div>
+        </div>
+        
+        <div className="settings-note">
+          You are watching Episode {currentEpisodeIndex + 1}
+        </div>
+        <div className="settings-note secondary">
+          If the current server is not working, please try switching to other servers.
         </div>
       </div>
 
@@ -404,7 +398,7 @@ const Ongaku = () => {
         </div>
         <div className="info-row">
           <span className="label">Server:</span>
-          <span className="value">{server === 'vidWish' ? 'VidWish' : 'MegaPlay'}</span>
+          <span className="value">{server === 'vidWish' ? 'Server 1' : 'Server 2'}</span>
         </div>
         <div className="info-row">
           <span className="label">Audio:</span>
@@ -447,10 +441,6 @@ const Ongaku = () => {
             </button>
           </div>
           <div className="nav-actions">
-            <button onClick={() => setLanguage(language === 'en' ? 'jp' : 'en')} className="nav-btn">
-              <Globe size={22} />
-              <span>{language.toUpperCase()}</span>
-            </button>
             <button onClick={() => setActiveView('liked')} className="nav-btn">
               <Heart size={22} />
               {likedAnimes.length > 0 && <span className="badge">{likedAnimes.length}</span>}
@@ -459,8 +449,8 @@ const Ongaku = () => {
               <Bookmark size={22} />
               {bookmarkedAnimes.length > 0 && <span className="badge">{bookmarkedAnimes.length}</span>}
             </button>
-            <button className="nav-btn">
-              <User size={22} />
+            <button onClick={toggleTheme} className="theme-toggle">
+              {darkMode ? <Sun size={22} /> : <Moon size={22} />}
             </button>
           </div>
         </div>
@@ -1222,21 +1212,24 @@ const Ongaku = () => {
           pointer-events: auto;
         }
 
-        .breadcrumb {
+        .episode-badge {
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(10px);
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          color: white;
+          font-size: 0.9rem;
+          font-weight: 600;
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          color: white;
-          font-size: 0.9rem;
         }
 
-        .breadcrumb span {
-          opacity: 0.8;
-        }
-
-        .breadcrumb span:last-child {
-          opacity: 1;
-          font-weight: 600;
+        .filler-tag {
+          background: #ef4444;
+          padding: 0.15rem 0.5rem;
+          border-radius: 10px;
+          font-size: 0.75rem;
         }
 
         .overlay-controls {
@@ -1260,8 +1253,119 @@ const Ongaku = () => {
           transform: scale(1.1);
         }
 
-        .overlay-controls button.active {
+        .player-info-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.75rem 1rem;
+          border-radius: 0 0 12px 12px;
+          margin-top: -4px;
+        }
+
+        .dark .player-info-bar {
+          background: rgba(15, 15, 30, 0.9);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-top: none;
+        }
+
+        .light .player-info-bar {
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+          border-top: none;
+        }
+
+        .episode-info {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .episode-number {
+          font-weight: 600;
+          font-size: 1rem;
+        }
+
+        .episode-title {
+          font-size: 0.9rem;
+          opacity: 0.7;
+        }
+
+        .player-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .player-actions button {
+          background: rgba(0, 0, 0, 0.2);
+          border: none;
+          padding: 0.5rem;
+          border-radius: 50%;
+          cursor: pointer;
+          color: inherit;
+          transition: all 0.3s ease;
+        }
+
+        .player-actions button:hover {
+          background: rgba(0, 0, 0, 0.4);
+          transform: scale(1.1);
+        }
+
+        .player-actions button.active {
           background: #f43f5e;
+          color: white;
+        }
+
+        .player-settings {
+          background: rgba(0, 0, 0, 0.7);
+          border-radius: 8px;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .settings-row {
+          display: flex;
+          margin-bottom: 1rem;
+        }
+
+        .settings-item {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .settings-btn {
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.3s ease;
+        }
+
+        .dark .settings-btn {
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+        }
+
+        .light .settings-btn {
+          background: rgba(0, 0, 0, 0.1);
+          color: #1a1a2e;
+        }
+
+        .settings-btn.active {
+          background: #ff9500;
+          color: white;
+        }
+
+        .settings-note {
+          color: white;
+          font-size: 0.9rem;
+          margin-top: 0.5rem;
+        }
+
+        .settings-note.secondary {
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 0.8rem;
+          margin-top: 0.25rem;
         }
 
         .player-controls {
@@ -1567,12 +1671,10 @@ const Ongaku = () => {
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
           }
 
-          .breadcrumb {
-            font-size: 0.7rem;
-          }
-
-          .overlay-controls {
-            gap: 0.25rem;
+          .player-info-bar {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
           }
         }
       `}</style>
