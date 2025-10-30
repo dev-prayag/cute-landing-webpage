@@ -433,7 +433,7 @@ const Ongaku = () => {
       
       <nav className="navbar">
         <div className="nav-container">
-          <h1 className="logo" onClick={() => setActiveView('home')}>AnimeStream</h1>
+          <h1 className="logo" onClick={() => setActiveView('home')}>音楽子</h1>
           <div className="search-bar">
             <Search size={20} />
             <input
