@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack } from 'lucide-react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack, ChevronLeft, ChevronRight, History } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
@@ -46,18 +46,87 @@ const Ongaku = () => {
   const [server, setServer] = useState('vidWish');
   const [likedAnimes, setLikedAnimes] = useState([]);
   const [bookmarkedAnimes, setBookmarkedAnimes] = useState([]);
+  const [watchHistory, setWatchHistory] = useState([]);
   const [activeView, setActiveView] = useState('home');
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [currentSpotlightIndex, setCurrentSpotlightIndex] = useState(0);
+  const [autoScrollInterval, setAutoScrollInterval] = useState(null);
   const iframeRef = useRef(null);
+  const spotlightRef = useRef(null);
+
+  // Initialize from URL
+  useEffect(() => {
+    const path = window.location.pathname;
+    
+    if (path === '/' || path === '/home') {
+      setActiveView('home');
+    } else if (path.startsWith('/anime/')) {
+      const pathParts = path.split('/');
+      if (pathParts.length >= 4) {
+        const animeId = pathParts[2];
+        const epNumber = pathParts[3];
+        // Fetch anime details and set episode
+        fetchAnimeDetails(animeId).then(() => {
+          fetchEpisodes(animeId).then(() => {
+            const episodeIndex = parseInt(epNumber) - 1;
+            if (episodeIndex >= 0 && episodeIndex < episodes.length) {
+              handleEpisodeSelect(episodes[episodeIndex], episodeIndex);
+            }
+          });
+        });
+      }
+    } else if (path === '/liked') {
+      setActiveView('liked');
+    } else if (path === '/bookmarked') {
+      setActiveView('bookmarked');
+    }
+  }, []);
+
+  // Update URL when view changes
+  useEffect(() => {
+    const path = window.location.pathname;
+    let newPath = '/';
+    
+    if (activeView === 'home') {
+      newPath = '/home';
+    } else if (activeView === 'watch' && selectedAnime && selectedEpisode) {
+      const epNumber = currentEpisodeIndex + 1;
+      newPath = `/anime/${selectedAnime.id}/${epNumber}`;
+    } else if (activeView === 'liked') {
+      newPath = '/liked';
+    } else if (activeView === 'bookmarked') {
+      newPath = '/bookmarked';
+    }
+    
+    if (path !== newPath) {
+      window.history.pushState(null, null, newPath);
+    }
+  }, [activeView, selectedAnime, selectedEpisode, currentEpisodeIndex]);
 
   useEffect(() => {
     const liked = JSON.parse(localStorage.getItem('likedAnimes') || '[]');
     const bookmarked = JSON.parse(localStorage.getItem('bookmarkedAnimes') || '[]');
+    const history = JSON.parse(localStorage.getItem('watchHistory') || '[]');
     setLikedAnimes(liked);
     setBookmarkedAnimes(bookmarked);
+    setWatchHistory(history);
     fetchHomeData();
   }, []);
+
+  useEffect(() => {
+    // Auto-scroll spotlight
+    if (homeData?.spotlight && homeData.spotlight.length > 0) {
+      const interval = setInterval(() => {
+        setCurrentSpotlightIndex((prevIndex) => 
+          (prevIndex + 1) % homeData.spotlight.length
+        );
+      }, 5000);
+      setAutoScrollInterval(interval);
+      
+      return () => clearInterval(interval);
+    }
+  }, [homeData]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -89,6 +158,7 @@ const Ongaku = () => {
     try {
       const data = await fetchWithCache(`${API_BASE}/anime/${animeId}`);
       setAnimeDetails(data.data);
+      return data.data;
     } catch (err) {
       console.error('Error fetching anime details:', err);
     }
@@ -98,6 +168,7 @@ const Ongaku = () => {
     try {
       const data = await fetchWithCache(`${API_BASE}/episodes/${animeId}`);
       setEpisodes(data.data);
+      return data.data;
     } catch (err) {
       console.error('Error fetching episodes:', err);
     }
@@ -146,6 +217,24 @@ const Ongaku = () => {
     setSelectedEpisode(episode);
     setCurrentEpisodeIndex(index);
     setActiveView('watch');
+    
+    // Add to watch history
+    const historyItem = {
+      anime: animeDetails,
+      episode: episode,
+      episodeIndex: index,
+      timestamp: new Date().toISOString()
+    };
+    
+    const updatedHistory = [
+      historyItem,
+      ...watchHistory.filter(item => 
+        !(item.anime.id === animeDetails.id && item.episodeIndex === index)
+      )
+    ].slice(0, 20); // Keep only last 20 items
+    
+    setWatchHistory(updatedHistory);
+    localStorage.setItem('watchHistory', JSON.stringify(updatedHistory));
   };
 
   const changeEpisode = (direction) => {
@@ -153,6 +242,24 @@ const Ongaku = () => {
     if (newIndex >= 0 && newIndex < episodes.length) {
       setSelectedEpisode(episodes[newIndex]);
       setCurrentEpisodeIndex(newIndex);
+      
+      // Add to watch history
+      const historyItem = {
+        anime: animeDetails,
+        episode: episodes[newIndex],
+        episodeIndex: newIndex,
+        timestamp: new Date().toISOString()
+      };
+      
+      const updatedHistory = [
+        historyItem,
+        ...watchHistory.filter(item => 
+          !(item.anime.id === animeDetails.id && item.episodeIndex === newIndex)
+        )
+      ].slice(0, 20); // Keep only last 20 items
+      
+      setWatchHistory(updatedHistory);
+      localStorage.setItem('watchHistory', JSON.stringify(updatedHistory));
     }
   };
 
@@ -161,6 +268,52 @@ const Ongaku = () => {
     const episodeNum = selectedEpisode.id.split('ep=').pop();
     const baseUrl = server === 'vidWish' ? 'vidwish.live' : 'megaplay.buzz';
     return `https://${baseUrl}/stream/s-2/${episodeNum}/${streamType}`;
+  };
+
+  const handleSpotlightNav = (direction) => {
+    if (!homeData?.spotlight) return;
+    
+    // Clear auto-scroll interval when manually navigating
+    if (autoScrollInterval) {
+      clearInterval(autoScrollInterval);
+      setAutoScrollInterval(null);
+      
+      // Restart auto-scroll after 10 seconds of inactivity
+      const newInterval = setInterval(() => {
+        setCurrentSpotlightIndex((prevIndex) => 
+          (prevIndex + 1) % homeData.spotlight.length
+        );
+      }, 5000);
+      setAutoScrollInterval(newInterval);
+    }
+    
+    if (direction === 'next') {
+      setCurrentSpotlightIndex((prevIndex) => 
+        (prevIndex + 1) % homeData.spotlight.length
+      );
+    } else {
+      setCurrentSpotlightIndex((prevIndex) => 
+        prevIndex === 0 ? homeData.spotlight.length - 1 : prevIndex - 1
+      );
+    }
+  };
+
+  const handleSpotlightDotClick = (index) => {
+    // Clear auto-scroll interval when manually navigating
+    if (autoScrollInterval) {
+      clearInterval(autoScrollInterval);
+      setAutoScrollInterval(null);
+      
+      // Restart auto-scroll after 10 seconds of inactivity
+      const newInterval = setInterval(() => {
+        setCurrentSpotlightIndex((prevIndex) => 
+          (prevIndex + 1) % homeData.spotlight.length
+        );
+      }, 5000);
+      setAutoScrollInterval(newInterval);
+    }
+    
+    setCurrentSpotlightIndex(index);
   };
 
   const AnimeCard = ({ anime, index }) => (
@@ -202,31 +355,70 @@ const Ongaku = () => {
     </div>
   );
 
-  const SpotlightSection = () => (
-    <div className="spotlight-section">
-      {homeData?.spotlight?.slice(0, 5).map((anime, i) => (
-        <div key={i} className="spotlight-item" style={{ animationDelay: `${i * 0.2}s` }}>
-          <img src={anime.poster} alt={anime.title} loading="lazy" />
-          <div className="spotlight-content">
-            <span className="rank">#{anime.rank}</span>
-            <h2>{anime.title}</h2>
-            <p>{anime.synopsis?.slice(0, 200)}...</p>
-            <div className="spotlight-meta">
-              <span><Calendar size={16} /> {anime.aired}</span>
-              <span><Clock size={16} /> {anime.duration}</span>
-              <span className="quality">{anime.quality}</span>
-            </div>
-            <button className="watch-btn" onClick={() => {
-              setSelectedAnime(anime);
-              setActiveView('details');
-            }}>
-              <Play size={20} /> Watch Now
-            </button>
+  const SpotlightSection = () => {
+    if (!homeData?.spotlight || homeData.spotlight.length === 0) return null;
+    
+    return (
+      <div className="spotlight-section" ref={spotlightRef}>
+        <div className="spotlight-container">
+          <button 
+            className="spotlight-nav spotlight-nav-prev" 
+            onClick={() => handleSpotlightNav('prev')}
+          >
+            <ChevronLeft size={24} />
+          </button>
+          
+          <div className="spotlight-slider">
+            {homeData.spotlight.map((anime, i) => (
+              <div 
+                key={i} 
+                className={`spotlight-item ${i === currentSpotlightIndex ? 'active' : ''}`}
+                style={{ 
+                  transform: `translateX(${(i - currentSpotlightIndex) * 100}%)`,
+                  opacity: i === currentSpotlightIndex ? 1 : 0
+                }}
+              >
+                <img src={anime.poster} alt={anime.title} loading="lazy" />
+                <div className="spotlight-content">
+                  <span className="rank">#{anime.rank}</span>
+                  <h2>{anime.title}</h2>
+                  <p>{anime.synopsis?.slice(0, 200)}...</p>
+                  <div className="spotlight-meta">
+                    <span><Calendar size={16} /> {anime.aired}</span>
+                    <span><Clock size={16} /> {anime.duration}</span>
+                    <span className="quality">{anime.quality}</span>
+                  </div>
+                  <button className="watch-btn" onClick={() => {
+                    setSelectedAnime(anime);
+                    setActiveView('details');
+                  }}>
+                    <Play size={20} /> Watch Now
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
+          
+          <button 
+            className="spotlight-nav spotlight-nav-next" 
+            onClick={() => handleSpotlightNav('next')}
+          >
+            <ChevronRight size={24} />
+          </button>
         </div>
-      ))}
-    </div>
-  );
+        
+        <div className="spotlight-dots">
+          {homeData.spotlight.map((_, i) => (
+            <button 
+              key={i} 
+              className={`spotlight-dot ${i === currentSpotlightIndex ? 'active' : ''}`}
+              onClick={() => handleSpotlightDotClick(i)}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const AnimeDetailsView = () => (
     <div className="anime-details">
@@ -320,13 +512,30 @@ const Ongaku = () => {
 
       <div className={`video-wrapper ${isTheaterMode ? 'theater-mode' : ''}`}>
         <div className="video-container">
-          <iframe
-            ref={iframeRef}
-            src={getStreamUrl()}
-            className="video-player"
-            allowFullScreen
-            allow="autoplay; encrypted-media; picture-in-picture"
-          />
+          {selectedEpisode ? (
+            <iframe
+              ref={iframeRef}
+              src={getStreamUrl()}
+              className="video-player"
+              allowFullScreen
+              allow="autoplay; encrypted-media; picture-in-picture"
+            />
+          ) : (
+            <div className="video-loader">
+              <div className="loader-animation">
+                <div className="music-note">
+                  <span>♪</span>
+                </div>
+                <div className="music-note">
+                  <span>♫</span>
+                </div>
+                <div className="music-note">
+                  <span>♬</span>
+                </div>
+              </div>
+              <p>Loading episode...</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -397,7 +606,7 @@ const Ongaku = () => {
     <div className={`app ${darkMode ? 'dark' : 'light'}`}>
       <nav className="navbar">
         <div className="nav-container">
-          <h1 className="logo" onClick={() => setActiveView('home')}>Anime KAI</h1>
+          <h1 className="logo" onClick={() => setActiveView('home')}>音楽子</h1>
           <div className="search-bar">
             <input
               type="text"
@@ -429,13 +638,57 @@ const Ongaku = () => {
       <main className="main-content">
         {loading ? (
           <div className="loader-container">
-            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' stroke='%23667eea' stroke-width='8' fill='none' stroke-dasharray='63 188' stroke-linecap='round'%3E%3CanimateTransform attributeName='transform' type='rotate' repeatCount='indefinite' dur='1s' values='0 50 50;360 50 50' keyTimes='0;1'/%3E%3C/circle%3E%3C/svg%3E" alt="Loading..." className="loader" />
+            <img src="/assets/loader.gif" alt="Loading..." className="loader" />
           </div>
         ) : (
           <>
             {activeView === 'home' && homeData && (
               <>
                 <SpotlightSection />
+                
+                {watchHistory.length > 0 && (
+                  <section className="anime-section">
+                    <h2><History size={24} /> Continue Watching</h2>
+                    <div className="anime-grid">
+                      {watchHistory.slice(0, 6).map((item, i) => (
+                        <div 
+                          key={i} 
+                          className="anime-card"
+                          style={{ animationDelay: `${i * 0.1}s` }}
+                          onClick={() => {
+                            setSelectedAnime(item.anime);
+                            setActiveView('details');
+                            fetchAnimeDetails(item.anime.id).then(() => {
+                              fetchEpisodes(item.anime.id).then(() => {
+                                handleEpisodeSelect(item.episode, item.episodeIndex);
+                              });
+                            });
+                          }}
+                        >
+                          <div className="anime-card-inner">
+                            <img src={item.anime.poster} alt={item.anime.title} loading="lazy" />
+                            <div className="anime-overlay">
+                              <Play className="play-icon" />
+                            </div>
+                            <div className="progress-bar">
+                              <div 
+                                className="progress-fill" 
+                                style={{ width: `${(item.episodeIndex / episodes.length) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="anime-info">
+                            <h3>{item.anime.title}</h3>
+                            <div className="anime-meta">
+                              <span>EP {item.episodeIndex + 1}</span>
+                              <span>{new Date(item.timestamp).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 
                 <section className="anime-section">
                   <h2><TrendingUp size={24} /> Trending Now</h2>
@@ -513,6 +766,10 @@ const Ongaku = () => {
         )}
       </main>
 
+      <footer className="footer">
+        <p>Made with love by prayag.cake</p>
+      </footer>
+
       {showBackToTop && (
         <button className="back-to-top" onClick={scrollToTop}>
           <ChevronUp size={24} />
@@ -530,6 +787,8 @@ const Ongaku = () => {
           min-height: 100vh;
           transition: background-color 0.3s ease, color 0.3s ease;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+          display: flex;
+          flex-direction: column;
         }
 
         .app.dark {
@@ -689,31 +948,37 @@ const Ongaku = () => {
           max-width: 1400px;
           margin: 0 auto;
           padding: 2rem;
+          flex: 1;
         }
 
         .spotlight-section {
           margin-bottom: 3rem;
-          display: grid;
-          gap: 2rem;
+          position: relative;
+          height: 500px;
+          overflow: hidden;
+          border-radius: 20px;
+        }
+
+        .spotlight-container {
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+
+        .spotlight-slider {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
         }
 
         .spotlight-item {
-          position: relative;
-          height: 500px;
-          border-radius: 20px;
-          overflow: hidden;
-          animation: fadeInUp 0.6s ease-out;
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          transition: transform 0.5s ease, opacity 0.5s ease;
         }
 
         .spotlight-item img {
@@ -785,6 +1050,62 @@ const Ongaku = () => {
         .watch-btn:hover {
           transform: translateY(-2px);
           box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .spotlight-nav {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          background: rgba(0, 0, 0, 0.5);
+          color: white;
+          border: none;
+          width: 50px;
+          height: 50px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 10;
+          transition: all 0.3s ease;
+        }
+
+        .spotlight-nav:hover {
+          background: rgba(0, 0, 0, 0.8);
+        }
+
+        .spotlight-nav-prev {
+          left: 1rem;
+        }
+
+        .spotlight-nav-next {
+          right: 1rem;
+        }
+
+        .spotlight-dots {
+          position: absolute;
+          bottom: 1rem;
+          left: 0;
+          right: 0;
+          display: flex;
+          justify-content: center;
+          gap: 0.5rem;
+          z-index: 10;
+        }
+
+        .spotlight-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.5);
+          border: none;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .spotlight-dot.active {
+          background: white;
+          transform: scale(1.2);
         }
 
         .anime-section {
@@ -882,6 +1203,20 @@ const Ongaku = () => {
 
         .anime-actions button.active {
           background: #f43f5e;
+        }
+
+        .progress-bar {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .progress-fill {
+          height: 100%;
+          background: #667eea;
         }
 
         .anime-info {
@@ -1157,6 +1492,48 @@ const Ongaku = () => {
           border: none;
         }
 
+        .video-loader {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: #000;
+          color: white;
+        }
+
+        .loader-animation {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .music-note {
+          font-size: 2rem;
+          animation: musicNote 1.5s infinite ease-in-out;
+        }
+
+        .music-note:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+
+        .music-note:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+
+        @keyframes musicNote {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
+        }
+
         .player-info-bar {
           display: flex;
           justify-content: space-between;
@@ -1371,6 +1748,13 @@ const Ongaku = () => {
           border-color: transparent;
         }
 
+        .footer {
+          text-align: center;
+          padding: 1rem;
+          font-size: 0.9rem;
+          opacity: 0.7;
+        }
+
         .back-to-top {
           position: fixed;
           bottom: 2rem;
@@ -1406,17 +1790,16 @@ const Ongaku = () => {
         .loader {
           width: 80px;
           height: 80px;
-          animation: pulse 1.5s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-            transform: scale(1);
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
           }
-          50% {
-            opacity: 0.5;
-            transform: scale(0.95);
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
 
