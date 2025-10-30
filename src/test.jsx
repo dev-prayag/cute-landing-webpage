@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack, ChevronLeft, ChevronRight, History } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, ChevronLeft, ChevronRight, History } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
@@ -49,11 +49,10 @@ const Ongaku = () => {
   const [watchHistory, setWatchHistory] = useState([]);
   const [activeView, setActiveView] = useState('home');
   const [isTheaterMode, setIsTheaterMode] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [currentSpotlightIndex, setCurrentSpotlightIndex] = useState(0);
   const [autoScrollInterval, setAutoScrollInterval] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [shouldReloadPlayer, setShouldReloadPlayer] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState('');
   const [selectedLetter, setSelectedLetter] = useState(null);
   const [letterAnimes, setLetterAnimes] = useState([]);
   const iframeRef = useRef(null);
@@ -63,7 +62,7 @@ const Ongaku = () => {
   useEffect(() => {
     if (!isInitialized) {
       const path = window.location.pathname;
-      
+
       if (path === '/' || path === '/home') {
         setActiveView('home');
       } else if (path.startsWith('/anime/')) {
@@ -91,7 +90,7 @@ const Ongaku = () => {
       } else if (path === '/bookmarked') {
         setActiveView('bookmarked');
       }
-      
+
       setIsInitialized(true);
     }
   }, [isInitialized]);
@@ -101,7 +100,7 @@ const Ongaku = () => {
     if (isInitialized) {
       const path = window.location.pathname;
       let newPath = '/';
-      
+
       if (activeView === 'home') {
         newPath = '/home';
       } else if (activeView === 'watch' && selectedAnime && selectedEpisode) {
@@ -112,12 +111,20 @@ const Ongaku = () => {
       } else if (activeView === 'bookmarked') {
         newPath = '/bookmarked';
       }
-      
+
       if (path !== newPath) {
         window.history.pushState(null, null, newPath);
       }
     }
   }, [activeView, selectedAnime, selectedEpisode, currentEpisodeIndex, isInitialized]);
+
+  // Update stream src only when necessary
+  useEffect(() => {
+    if (selectedEpisode) {
+      const newSrc = getStreamUrl();
+      setCurrentSrc(newSrc);
+    }
+  }, [selectedEpisode, streamType, server]);
 
   useEffect(() => {
     const liked = JSON.parse(localStorage.getItem('likedAnimes') || '[]');
@@ -133,12 +140,12 @@ const Ongaku = () => {
     // Auto-scroll spotlight
     if (homeData?.spotlight && homeData.spotlight.length > 0) {
       const interval = setInterval(() => {
-        setCurrentSpotlightIndex((prevIndex) => 
+        setCurrentSpotlightIndex((prevIndex) =>
           (prevIndex + 1) % homeData.spotlight.length
         );
       }, 5000);
       setAutoScrollInterval(interval);
-      
+
       return () => clearInterval(interval);
     }
   }, [homeData]);
@@ -193,7 +200,7 @@ const Ongaku = () => {
 
   const fetchAnimesByLetter = async (letter) => {
     if (!letter) return;
-    
+
     setLoading(true);
     try {
       // This is a mock implementation since the API might not have this endpoint
@@ -203,11 +210,11 @@ const Ongaku = () => {
         ...homeData?.mostPopular || [],
         ...homeData?.newAdded || []
       ];
-      
-      const filtered = allAnimes.filter(anime => 
+
+      const filtered = allAnimes.filter(anime =>
         anime.title && anime.title.toLowerCase().startsWith(letter.toLowerCase())
       );
-      
+
       setLetterAnimes(filtered);
       setActiveView('letter');
     } catch (err) {
@@ -219,7 +226,7 @@ const Ongaku = () => {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-    
+
     setLoading(true);
     try {
       const data = await fetchWithCache(`${API_BASE}/search?keyword=${encodeURIComponent(searchQuery)}&page=1`);
@@ -260,8 +267,7 @@ const Ongaku = () => {
     setSelectedEpisode(episode);
     setCurrentEpisodeIndex(index);
     setActiveView('watch');
-    setShouldReloadPlayer(true);
-    
+
     // Add to watch history
     const historyItem = {
       anime: animeDetails,
@@ -269,14 +275,14 @@ const Ongaku = () => {
       episodeIndex: index,
       timestamp: new Date().toISOString()
     };
-    
+
     const updatedHistory = [
       historyItem,
-      ...watchHistory.filter(item => 
+      ...watchHistory.filter(item =>
         !(item.anime.id === animeDetails.id && item.episodeIndex === index)
       )
     ].slice(0, 20); // Keep only last 20 items
-    
+
     setWatchHistory(updatedHistory);
     localStorage.setItem('watchHistory', JSON.stringify(updatedHistory));
   };
@@ -286,8 +292,7 @@ const Ongaku = () => {
     if (newIndex >= 0 && newIndex < episodes.length) {
       setSelectedEpisode(episodes[newIndex]);
       setCurrentEpisodeIndex(newIndex);
-      setShouldReloadPlayer(true);
-      
+
       // Add to watch history
       const historyItem = {
         anime: animeDetails,
@@ -295,14 +300,14 @@ const Ongaku = () => {
         episodeIndex: newIndex,
         timestamp: new Date().toISOString()
       };
-      
+
       const updatedHistory = [
         historyItem,
-        ...watchHistory.filter(item => 
+        ...watchHistory.filter(item =>
           !(item.anime.id === animeDetails.id && item.episodeIndex === newIndex)
         )
       ].slice(0, 20); // Keep only last 20 items
-      
+
       setWatchHistory(updatedHistory);
       localStorage.setItem('watchHistory', JSON.stringify(updatedHistory));
     }
@@ -310,12 +315,10 @@ const Ongaku = () => {
 
   const changeStreamType = (type) => {
     setStreamType(type);
-    setShouldReloadPlayer(true);
   };
 
   const changeServer = (serverName) => {
     setServer(serverName);
-    setShouldReloadPlayer(true);
   };
 
   const getStreamUrl = () => {
@@ -327,27 +330,27 @@ const Ongaku = () => {
 
   const handleSpotlightNav = (direction) => {
     if (!homeData?.spotlight) return;
-    
+
     // Clear auto-scroll interval when manually navigating
     if (autoScrollInterval) {
       clearInterval(autoScrollInterval);
       setAutoScrollInterval(null);
-      
+
       // Restart auto-scroll after 10 seconds of inactivity
       const newInterval = setInterval(() => {
-        setCurrentSpotlightIndex((prevIndex) => 
+        setCurrentSpotlightIndex((prevIndex) =>
           (prevIndex + 1) % homeData.spotlight.length
         );
       }, 5000);
       setAutoScrollInterval(newInterval);
     }
-    
+
     if (direction === 'next') {
-      setCurrentSpotlightIndex((prevIndex) => 
+      setCurrentSpotlightIndex((prevIndex) =>
         (prevIndex + 1) % homeData.spotlight.length
       );
     } else {
-      setCurrentSpotlightIndex((prevIndex) => 
+      setCurrentSpotlightIndex((prevIndex) =>
         prevIndex === 0 ? homeData.spotlight.length - 1 : prevIndex - 1
       );
     }
@@ -358,16 +361,16 @@ const Ongaku = () => {
     if (autoScrollInterval) {
       clearInterval(autoScrollInterval);
       setAutoScrollInterval(null);
-      
+
       // Restart auto-scroll after 10 seconds of inactivity
       const newInterval = setInterval(() => {
-        setCurrentSpotlightIndex((prevIndex) => 
+        setCurrentSpotlightIndex((prevIndex) =>
           (prevIndex + 1) % homeData.spotlight.length
         );
       }, 5000);
       setAutoScrollInterval(newInterval);
     }
-    
+
     setCurrentSpotlightIndex(index);
   };
 
@@ -377,7 +380,7 @@ const Ongaku = () => {
   };
 
   const AnimeCard = ({ anime, index }) => (
-    <div 
+    <div
       className="anime-card"
       style={{ animationDelay: `${index * 0.1}s` }}
       onClick={() => {
@@ -391,13 +394,13 @@ const Ongaku = () => {
           <Play className="play-icon" />
         </div>
         <div className="anime-actions">
-          <button 
+          <button
             onClick={(e) => { e.stopPropagation(); toggleLike(anime); }}
             className={likedAnimes.some(a => a.id === anime.id) ? 'active' : ''}
           >
             <Heart size={18} />
           </button>
-          <button 
+          <button
             onClick={(e) => { e.stopPropagation(); toggleBookmark(anime); }}
             className={bookmarkedAnimes.some(a => a.id === anime.id) ? 'active' : ''}
           >
@@ -417,23 +420,23 @@ const Ongaku = () => {
 
   const SpotlightSection = () => {
     if (!homeData?.spotlight || homeData.spotlight.length === 0) return null;
-    
+
     return (
       <div className="spotlight-section" ref={spotlightRef}>
         <div className="spotlight-container">
-          <button 
-            className="spotlight-nav spotlight-nav-prev" 
+          <button
+            className="spotlight-nav spotlight-nav-prev"
             onClick={() => handleSpotlightNav('prev')}
           >
             <ChevronLeft size={24} />
           </button>
-          
+
           <div className="spotlight-slider">
             {homeData.spotlight.map((anime, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className={`spotlight-item ${i === currentSpotlightIndex ? 'active' : ''}`}
-                style={{ 
+                style={{
                   transform: `translateX(${(i - currentSpotlightIndex) * 100}%)`,
                   opacity: i === currentSpotlightIndex ? 1 : 0
                 }}
@@ -458,19 +461,19 @@ const Ongaku = () => {
               </div>
             ))}
           </div>
-          
-          <button 
-            className="spotlight-nav spotlight-nav-next" 
+
+          <button
+            className="spotlight-nav spotlight-nav-next"
             onClick={() => handleSpotlightNav('next')}
           >
             <ChevronRight size={24} />
           </button>
         </div>
-        
+
         <div className="spotlight-dots">
           {homeData.spotlight.map((_, i) => (
-            <button 
-              key={i} 
+            <button
+              key={i}
               className={`spotlight-dot ${i === currentSpotlightIndex ? 'active' : ''}`}
               onClick={() => handleSpotlightDotClick(i)}
             />
@@ -485,7 +488,7 @@ const Ongaku = () => {
       <button className="back-btn" onClick={() => setActiveView('home')}>
         <ArrowLeft size={20} /> Back
       </button>
-      
+
       {animeDetails && (
         <div className="details-header">
           <img src={animeDetails.poster} alt={animeDetails.title} className="details-poster" loading="lazy" />
@@ -505,13 +508,13 @@ const Ongaku = () => {
               ))}
             </div>
             <div className="action-buttons">
-              <button 
+              <button
                 className={`action-btn ${likedAnimes.some(a => a.id === animeDetails.id) ? 'active' : ''}`}
                 onClick={() => toggleLike(animeDetails)}
               >
                 <Heart size={20} /> {likedAnimes.some(a => a.id === animeDetails.id) ? 'Liked' : 'Like'}
               </button>
-              <button 
+              <button
                 className={`action-btn ${bookmarkedAnimes.some(a => a.id === animeDetails.id) ? 'active' : ''}`}
                 onClick={() => toggleBookmark(animeDetails)}
               >
@@ -526,8 +529,8 @@ const Ongaku = () => {
         <h2>Episodes ({episodes.length})</h2>
         <div className="episodes-grid">
           {episodes.map((ep, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className="episode-card"
               onClick={() => handleEpisodeSelect(ep, i)}
             >
@@ -553,14 +556,14 @@ const Ongaku = () => {
           <span className="episode-title">{selectedEpisode?.title}</span>
         </div>
         <div className="player-actions">
-          <button 
+          <button
             onClick={() => toggleLike(animeDetails)}
             className={likedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
             title="Like"
           >
             <Heart size={18} />
           </button>
-          <button 
+          <button
             onClick={() => toggleBookmark(animeDetails)}
             className={bookmarkedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
             title="Bookmark"
@@ -574,13 +577,11 @@ const Ongaku = () => {
         <div className="video-container">
           {selectedEpisode ? (
             <iframe
-              key={shouldReloadPlayer ? 'reload' : 'keep'}
               ref={iframeRef}
-              src={getStreamUrl()}
+              src={currentSrc}
               className="video-player"
               allowFullScreen
               allow="autoplay; encrypted-media; picture-in-picture"
-              onLoad={() => setShouldReloadPlayer(false)}
             />
           ) : (
             <div className="video-loader">
@@ -606,13 +607,13 @@ const Ongaku = () => {
         <div className="settings-container">
           <div className="settings-row">
             <div className="settings-item">
-              <button 
+              <button
                 className={`settings-btn ${streamType === 'sub' ? 'active' : ''}`}
                 onClick={() => changeStreamType('sub')}
               >
                 cc Hard Sub
               </button>
-              <button 
+              <button
                 className={`settings-btn ${streamType === 'dub' ? 'active' : ''}`}
                 onClick={() => changeStreamType('dub')}
               >
@@ -620,16 +621,16 @@ const Ongaku = () => {
               </button>
             </div>
           </div>
-          
+
           <div className="settings-row">
             <div className="settings-item">
-              <button 
+              <button
                 className={`settings-btn ${server === 'vidWish' ? 'active' : ''}`}
                 onClick={() => changeServer('vidWish')}
               >
                 Server 1
               </button>
-              <button 
+              <button
                 className={`settings-btn ${server === 'megaPlay' ? 'active' : ''}`}
                 onClick={() => changeServer('megaPlay')}
               >
@@ -637,7 +638,7 @@ const Ongaku = () => {
               </button>
             </div>
           </div>
-          
+
           <div className="settings-note">
             You are watching Episode {currentEpisodeIndex + 1}
           </div>
@@ -666,7 +667,7 @@ const Ongaku = () => {
 
   const Footer = () => {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-    
+
     return (
       <footer className="footer">
         <div className="footer-container">
@@ -685,18 +686,18 @@ const Ongaku = () => {
               ))}
             </div>
           </div>
-          
+
           <div className="footer-section">
             <h3>About 音楽子</h3>
             <p>Your ultimate destination for free anime streaming. Watch thousands of episodes in HD quality.</p>
           </div>
-          
+
           <div className="footer-section">
             <h3>Legal</h3>
             <p>音楽子 does not store any files on our server. We only link to media hosted on 3rd party services.</p>
           </div>
         </div>
-        
+
         <div className="footer-bottom">
           <p>Made with love by prayag.cake</p>
         </div>
@@ -747,14 +748,14 @@ const Ongaku = () => {
             {activeView === 'home' && homeData && (
               <>
                 <SpotlightSection />
-                
+
                 {watchHistory.length > 0 && (
                   <section className="anime-section">
                     <h2><History size={24} /> Continue Watching</h2>
                     <div className="anime-grid">
                       {watchHistory.slice(0, 6).map((item, i) => (
-                        <div 
-                          key={i} 
+                        <div
+                          key={i}
                           className="anime-card"
                           style={{ animationDelay: `${i * 0.1}s` }}
                           onClick={() => {
@@ -773,8 +774,8 @@ const Ongaku = () => {
                               <Play className="play-icon" />
                             </div>
                             <div className="progress-bar">
-                              <div 
-                                className="progress-fill" 
+                              <div
+                                className="progress-fill"
                                 style={{ width: `${(item.episodeIndex / episodes.length) * 100}%` }}
                               />
                             </div>
@@ -791,7 +792,7 @@ const Ongaku = () => {
                     </div>
                   </section>
                 )}
-                
+
                 <section className="anime-section">
                   <h2><TrendingUp size={24} /> Trending Now</h2>
                   <div className="anime-grid">
@@ -880,7 +881,7 @@ const Ongaku = () => {
       </main>
 
       <div className="footer-separator"></div>
-      
+
       <Footer />
 
       {showBackToTop && (
