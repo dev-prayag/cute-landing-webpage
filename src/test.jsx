@@ -53,6 +53,9 @@ const Ongaku = () => {
   const [currentSpotlightIndex, setCurrentSpotlightIndex] = useState(0);
   const [autoScrollInterval, setAutoScrollInterval] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [shouldReloadPlayer, setShouldReloadPlayer] = useState(false);
+  const [selectedLetter, setSelectedLetter] = useState(null);
+  const [letterAnimes, setLetterAnimes] = useState([]);
   const iframeRef = useRef(null);
   const spotlightRef = useRef(null);
 
@@ -188,6 +191,32 @@ const Ongaku = () => {
     }
   };
 
+  const fetchAnimesByLetter = async (letter) => {
+    if (!letter) return;
+    
+    setLoading(true);
+    try {
+      // This is a mock implementation since the API might not have this endpoint
+      // In a real app, you would call the actual API endpoint
+      const allAnimes = [
+        ...homeData?.trending || [],
+        ...homeData?.mostPopular || [],
+        ...homeData?.newAdded || []
+      ];
+      
+      const filtered = allAnimes.filter(anime => 
+        anime.title && anime.title.toLowerCase().startsWith(letter.toLowerCase())
+      );
+      
+      setLetterAnimes(filtered);
+      setActiveView('letter');
+    } catch (err) {
+      console.error('Error fetching animes by letter:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     
@@ -231,6 +260,7 @@ const Ongaku = () => {
     setSelectedEpisode(episode);
     setCurrentEpisodeIndex(index);
     setActiveView('watch');
+    setShouldReloadPlayer(true);
     
     // Add to watch history
     const historyItem = {
@@ -256,6 +286,7 @@ const Ongaku = () => {
     if (newIndex >= 0 && newIndex < episodes.length) {
       setSelectedEpisode(episodes[newIndex]);
       setCurrentEpisodeIndex(newIndex);
+      setShouldReloadPlayer(true);
       
       // Add to watch history
       const historyItem = {
@@ -275,6 +306,16 @@ const Ongaku = () => {
       setWatchHistory(updatedHistory);
       localStorage.setItem('watchHistory', JSON.stringify(updatedHistory));
     }
+  };
+
+  const changeStreamType = (type) => {
+    setStreamType(type);
+    setShouldReloadPlayer(true);
+  };
+
+  const changeServer = (serverName) => {
+    setServer(serverName);
+    setShouldReloadPlayer(true);
   };
 
   const getStreamUrl = () => {
@@ -328,6 +369,11 @@ const Ongaku = () => {
     }
     
     setCurrentSpotlightIndex(index);
+  };
+
+  const handleLetterClick = (letter) => {
+    setSelectedLetter(letter);
+    fetchAnimesByLetter(letter);
   };
 
   const AnimeCard = ({ anime, index }) => (
@@ -528,11 +574,13 @@ const Ongaku = () => {
         <div className="video-container">
           {selectedEpisode ? (
             <iframe
+              key={shouldReloadPlayer ? 'reload' : 'keep'}
               ref={iframeRef}
               src={getStreamUrl()}
               className="video-player"
               allowFullScreen
               allow="autoplay; encrypted-media; picture-in-picture"
+              onLoad={() => setShouldReloadPlayer(false)}
             />
           ) : (
             <div className="video-loader">
@@ -560,13 +608,13 @@ const Ongaku = () => {
             <div className="settings-item">
               <button 
                 className={`settings-btn ${streamType === 'sub' ? 'active' : ''}`}
-                onClick={() => setStreamType('sub')}
+                onClick={() => changeStreamType('sub')}
               >
                 cc Hard Sub
               </button>
               <button 
                 className={`settings-btn ${streamType === 'dub' ? 'active' : ''}`}
-                onClick={() => setStreamType('dub')}
+                onClick={() => changeStreamType('dub')}
               >
                 Dub
               </button>
@@ -577,13 +625,13 @@ const Ongaku = () => {
             <div className="settings-item">
               <button 
                 className={`settings-btn ${server === 'vidWish' ? 'active' : ''}`}
-                onClick={() => setServer('vidWish')}
+                onClick={() => changeServer('vidWish')}
               >
                 Server 1
               </button>
               <button 
                 className={`settings-btn ${server === 'megaPlay' ? 'active' : ''}`}
-                onClick={() => setServer('megaPlay')}
+                onClick={() => changeServer('megaPlay')}
               >
                 Server 2
               </button>
@@ -615,6 +663,46 @@ const Ongaku = () => {
       </div>
     </div>
   );
+
+  const Footer = () => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    
+    return (
+      <footer className="footer">
+        <div className="footer-container">
+          <div className="footer-section">
+            <h3>Browse Anime</h3>
+            <p>Search anime alphabetically</p>
+            <div className="alphabet-grid">
+              {alphabet.map(letter => (
+                <button
+                  key={letter}
+                  className={`alphabet-btn ${selectedLetter === letter ? 'active' : ''}`}
+                  onClick={() => handleLetterClick(letter)}
+                >
+                  {letter}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="footer-section">
+            <h3>About 音楽子</h3>
+            <p>Your ultimate destination for free anime streaming. Watch thousands of episodes in HD quality.</p>
+          </div>
+          
+          <div className="footer-section">
+            <h3>Legal</h3>
+            <p>音楽子 does not store any files on our server. We only link to media hosted on 3rd party services.</p>
+          </div>
+        </div>
+        
+        <div className="footer-bottom">
+          <p>Made with love by prayag.cake</p>
+        </div>
+      </footer>
+    );
+  };
 
   return (
     <div className={`app ${darkMode ? 'dark' : 'light'}`}>
@@ -744,6 +832,17 @@ const Ongaku = () => {
               </section>
             )}
 
+            {activeView === 'letter' && (
+              <section className="anime-section">
+                <h2>Anime starting with "{selectedLetter}"</h2>
+                <div className="anime-grid">
+                  {letterAnimes.map((anime, i) => (
+                    <AnimeCard key={anime.id} anime={anime} index={i} />
+                  ))}
+                </div>
+              </section>
+            )}
+
             {activeView === 'liked' && (
               <section className="anime-section">
                 <h2><Heart size={24} /> Liked Anime</h2>
@@ -782,9 +881,7 @@ const Ongaku = () => {
 
       <div className="footer-separator"></div>
       
-      <footer className="footer">
-        <p>Made with love by prayag.cake</p>
-      </footer>
+      <Footer />
 
       {showBackToTop && (
         <button className="back-to-top" onClick={scrollToTop}>
@@ -808,13 +905,13 @@ const Ongaku = () => {
         }
 
         .app.dark {
-          background: #121212;
+          background: #000000;
           color: #ffffff;
         }
 
         .app.light {
-          background: #f5f5f5;
-          color: #121212;
+          background: #ffffff;
+          color: #000000;
         }
 
         .navbar {
@@ -827,7 +924,7 @@ const Ongaku = () => {
         }
 
         .dark .navbar {
-          background: #1e1e1e;
+          background: #000000;
           border-bottom: 1px solid #333333;
         }
 
@@ -872,13 +969,13 @@ const Ongaku = () => {
         }
 
         .dark .search-bar {
-          background: #2a2a2a;
-          border: 1px solid #444444;
+          background: #1a1a1a;
+          border: 1px solid #333333;
         }
 
         .light .search-bar {
-          background: #f0f0f0;
-          border: 1px solid #d0d0d0;
+          background: #f5f5f5;
+          border: 1px solid #e0e0e0;
         }
 
         .search-bar:focus-within {
@@ -1319,11 +1416,13 @@ const Ongaku = () => {
         }
 
         .dark .details-meta span {
-          background: #2a2a2a;
+          background: #1a1a1a;
+          border: 1px solid #333333;
         }
 
         .light .details-meta span {
-          background: #e0e0e0;
+          background: #f5f5f5;
+          border: 1px solid #e0e0e0;
         }
 
         .rating {
@@ -1424,13 +1523,13 @@ const Ongaku = () => {
         }
 
         .dark .episode-card {
-          background: #2a2a2a;
-          border: 1px solid #444444;
+          background: #1a1a1a;
+          border: 1px solid #333333;
         }
 
         .light .episode-card {
-          background: #e0e0e0;
-          border: 1px solid #d0d0d0;
+          background: #f5f5f5;
+          border: 1px solid #e0e0e0;
         }
 
         .episode-card:hover {
@@ -1439,11 +1538,11 @@ const Ongaku = () => {
         }
 
         .dark .episode-card:hover {
-          background: #333333;
+          background: #222222;
         }
 
         .light .episode-card:hover {
-          background: #d0d0d0;
+          background: #e0e0e0;
         }
 
         .episode-info {
@@ -1560,14 +1659,14 @@ const Ongaku = () => {
         }
 
         .dark .player-info-bar {
-          background: #2a2a2a;
-          border: 1px solid #444444;
+          background: #1a1a1a;
+          border: 1px solid #333333;
           border-bottom: none;
         }
 
         .light .player-info-bar {
-          background: #e0e0e0;
-          border: 1px solid #d0d0d0;
+          background: #f5f5f5;
+          border: 1px solid #e0e0e0;
           border-bottom: none;
         }
 
@@ -1628,13 +1727,13 @@ const Ongaku = () => {
         }
 
         .dark .player-settings-section {
-          background: #2a2a2a;
-          border: 1px solid #444444;
+          background: #1a1a1a;
+          border: 1px solid #333333;
         }
 
         .light .player-settings-section {
-          background: #e0e0e0;
-          border: 1px solid #d0d0d0;
+          background: #f5f5f5;
+          border: 1px solid #e0e0e0;
         }
 
         .settings-container {
@@ -1664,18 +1763,21 @@ const Ongaku = () => {
         }
 
         .dark .settings-btn {
-          background: #333333;
+          background: #222222;
           color: white;
+          border: 1px solid #333333;
         }
 
         .light .settings-btn {
-          background: #d0d0d0;
-          color: #121212;
+          background: #e0e0e0;
+          color: #000000;
+          border: 1px solid #d0d0d0;
         }
 
         .settings-btn.active {
           background: #ff9500;
           color: white;
+          border-color: transparent;
         }
 
         .settings-note {
@@ -1696,13 +1798,13 @@ const Ongaku = () => {
         }
 
         .dark .episodes-list-compact {
-          background: #2a2a2a;
-          border: 1px solid #444444;
+          background: #1a1a1a;
+          border: 1px solid #333333;
         }
 
         .light .episodes-list-compact {
-          background: #e0e0e0;
-          border: 1px solid #d0d0d0;
+          background: #f5f5f5;
+          border: 1px solid #e0e0e0;
         }
 
         .episodes-list-compact h3 {
@@ -1743,15 +1845,15 @@ const Ongaku = () => {
         }
 
         .dark .episode-btn {
-          background: #333333;
+          background: #222222;
           color: white;
-          border: 1px solid #444444;
+          border: 1px solid #333333;
         }
 
         .light .episode-btn {
-          background: #d0d0d0;
-          color: #121212;
-          border: 1px solid #c0c0c0;
+          background: #e0e0e0;
+          color: #000000;
+          border: 1px solid #d0d0d0;
         }
 
         .episode-btn:hover {
@@ -1771,8 +1873,93 @@ const Ongaku = () => {
         }
 
         .footer {
+          padding: 2rem 0;
+        }
+
+        .dark .footer {
+          background: #0a0a0a;
+          color: #ffffff;
+        }
+
+        .light .footer {
+          background: #f5f5f5;
+          color: #000000;
+        }
+
+        .footer-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 2rem;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 2rem;
+        }
+
+        .footer-section h3 {
+          font-size: 1.2rem;
+          margin-bottom: 1rem;
+          position: relative;
+          padding-bottom: 0.5rem;
+        }
+
+        .footer-section h3:after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          width: 50px;
+          height: 2px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .footer-section p {
+          margin-bottom: 1rem;
+          opacity: 0.8;
+          line-height: 1.6;
+        }
+
+        .alphabet-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+          gap: 0.5rem;
+        }
+
+        .alphabet-btn {
+          padding: 0.5rem;
+          border-radius: 6px;
+          border: none;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.3s ease;
+        }
+
+        .dark .alphabet-btn {
+          background: #1a1a1a;
+          color: white;
+          border: 1px solid #333333;
+        }
+
+        .light .alphabet-btn {
+          background: #e0e0e0;
+          color: #000000;
+          border: 1px solid #d0d0d0;
+        }
+
+        .alphabet-btn:hover {
+          transform: scale(1.05);
+        }
+
+        .alphabet-btn.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-color: transparent;
+        }
+
+        .footer-bottom {
           text-align: center;
-          padding: 1rem;
+          padding: 1rem 0;
+          margin-top: 2rem;
+          border-top: 1px solid rgba(102, 126, 234, 0.2);
           font-size: 0.9rem;
           opacity: 0.7;
         }
@@ -1888,13 +2075,13 @@ const Ongaku = () => {
             max-width: 100%;
           }
 
-          .footer-separator {
-            margin: 1rem 0;
+          .footer-container {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
           }
 
-          .footer {
-            font-size: 0.8rem;
-            padding: 0.5rem;
+          .alphabet-grid {
+            grid-template-columns: repeat(auto-fill, minmax(35px, 1fr));
           }
         }
       `}</style>
