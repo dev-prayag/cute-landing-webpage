@@ -294,6 +294,30 @@ const Ongaku = () => {
 
   const WatchView = () => (
     <div className="watch-container">
+      {/* Player info bar above the video */}
+      <div className="player-info-bar">
+        <div className="episode-info">
+          <span className="episode-number">{animeDetails?.title || 'Anime'}/Episode {currentEpisodeIndex + 1}</span>
+          <span className="episode-title">{selectedEpisode?.title}</span>
+        </div>
+        <div className="player-actions">
+          <button 
+            onClick={() => toggleLike(animeDetails)}
+            className={likedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
+            title="Like"
+          >
+            <Heart size={18} />
+          </button>
+          <button 
+            onClick={() => toggleBookmark(animeDetails)}
+            className={bookmarkedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
+            title="Bookmark"
+          >
+            <Bookmark size={18} />
+          </button>
+        </div>
+      </div>
+
       <div className={`video-wrapper ${isTheaterMode ? 'theater-mode' : ''}`}>
         <div className="video-container">
           <iframe
@@ -303,106 +327,52 @@ const Ongaku = () => {
             allowFullScreen
             allow="autoplay; encrypted-media; picture-in-picture"
           />
-          
-          <div className="video-overlay">
-            <div className="overlay-top">
-              <div className="episode-badge">
-                {animeDetails?.title || 'Anime'}/Episode {currentEpisodeIndex + 1}
-                {selectedEpisode?.isFiller && <span className="filler-tag">Filler</span>}
-              </div>
-              <div className="overlay-controls">
-                <button onClick={() => setIsTheaterMode(!isTheaterMode)} title="Theater Mode">
-                  <Maximize size={18} />
-                </button>
-                <button onClick={() => setShowSettings(!showSettings)} title="Settings">
-                  <Settings size={18} />
-                </button>
-              </div>
+        </div>
+      </div>
+
+      {/* Player settings section matching the theme with episodes section */}
+      <div className="player-settings-section">
+        <div className="settings-container">
+          <div className="settings-row">
+            <div className="settings-item">
+              <button 
+                className={`settings-btn ${streamType === 'sub' ? 'active' : ''}`}
+                onClick={() => setStreamType('sub')}
+              >
+                cc Hard Sub
+              </button>
+              <button 
+                className={`settings-btn ${streamType === 'dub' ? 'active' : ''}`}
+                onClick={() => setStreamType('dub')}
+              >
+                Dub
+              </button>
             </div>
           </div>
-        </div>
-        
-        {/* Player info bar below the video */}
-        <div className="player-info-bar">
-          <div className="episode-info">
-            <span className="episode-number">{animeDetails?.title || 'Anime'}/Episode {currentEpisodeIndex + 1}</span>
-            <span className="episode-title">{selectedEpisode?.title}</span>
+          
+          <div className="settings-row">
+            <div className="settings-item">
+              <button 
+                className={`settings-btn ${server === 'vidWish' ? 'active' : ''}`}
+                onClick={() => setServer('vidWish')}
+              >
+                Server 1
+              </button>
+              <button 
+                className={`settings-btn ${server === 'megaPlay' ? 'active' : ''}`}
+                onClick={() => setServer('megaPlay')}
+              >
+                Server 2
+              </button>
+            </div>
           </div>
-          <div className="player-actions">
-            <button 
-              onClick={() => toggleLike(animeDetails)}
-              className={likedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
-              title="Like"
-            >
-              <Heart size={18} />
-            </button>
-            <button 
-              onClick={() => toggleBookmark(animeDetails)}
-              className={bookmarkedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
-              title="Bookmark"
-            >
-              <Bookmark size={18} />
-            </button>
+          
+          <div className="settings-note">
+            You are watching Episode {currentEpisodeIndex + 1}
           </div>
-        </div>
-      </div>
-
-      {/* Player settings section matching the screenshot */}
-      <div className="player-settings">
-        <div className="settings-row">
-          <div className="settings-item">
-            <button 
-              className={`settings-btn ${streamType === 'sub' ? 'active' : ''}`}
-              onClick={() => setStreamType('sub')}
-            >
-              cc Hard Sub
-            </button>
-            <button 
-              className={`settings-btn ${streamType === 'dub' ? 'active' : ''}`}
-              onClick={() => setStreamType('dub')}
-            >
-              Dub
-            </button>
+          <div className="settings-note secondary">
+            If the current server is not working, please try switching to other servers.
           </div>
-        </div>
-        
-        <div className="settings-row">
-          <div className="settings-item">
-            <button 
-              className={`settings-btn ${server === 'vidWish' ? 'active' : ''}`}
-              onClick={() => setServer('vidWish')}
-            >
-              Server 1
-            </button>
-            <button 
-              className={`settings-btn ${server === 'megaPlay' ? 'active' : ''}`}
-              onClick={() => setServer('megaPlay')}
-            >
-              Server 2
-            </button>
-          </div>
-        </div>
-        
-        <div className="settings-note">
-          You are watching Episode {currentEpisodeIndex + 1}
-        </div>
-        <div className="settings-note secondary">
-          If the current server is not working, please try switching to other servers.
-        </div>
-      </div>
-
-      <div className="episode-info-card">
-        <div className="info-row">
-          <span className="label">Now Watching:</span>
-          <span className="value">Episode {currentEpisodeIndex + 1} of {episodes.length}</span>
-        </div>
-        <div className="info-row">
-          <span className="label">Server:</span>
-          <span className="value">{server === 'vidWish' ? 'Server 1' : 'Server 2'}</span>
-        </div>
-        <div className="info-row">
-          <span className="label">Audio:</span>
-          <span className="value">{streamType.toUpperCase()}</span>
         </div>
       </div>
 
@@ -427,7 +397,7 @@ const Ongaku = () => {
     <div className={`app ${darkMode ? 'dark' : 'light'}`}>
       <nav className="navbar">
         <div className="nav-container">
-          <h1 className="logo" onClick={() => setActiveView('home')}>音楽子</h1>
+          <h1 className="logo" onClick={() => setActiveView('home')}>Anime KAI</h1>
           <div className="search-bar">
             <input
               type="text"
@@ -1187,112 +1157,55 @@ const Ongaku = () => {
           border: none;
         }
 
-        .video-overlay {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .video-container:hover .video-overlay {
-          opacity: 1;
-        }
-
-        .overlay-top {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          padding: 1rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
-          pointer-events: auto;
-        }
-
-        .episode-badge {
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(10px);
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          color: white;
-          font-size: 0.9rem;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .filler-tag {
-          background: #ef4444;
-          padding: 0.15rem 0.5rem;
-          border-radius: 10px;
-          font-size: 0.75rem;
-        }
-
-        .overlay-controls {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .overlay-controls button {
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(10px);
-          border: none;
-          padding: 0.5rem;
-          border-radius: 50%;
-          color: white;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .overlay-controls button:hover {
-          background: rgba(255, 255, 255, 0.2);
-          transform: scale(1.1);
-        }
-
         .player-info-bar {
           display: flex;
           justify-content: space-between;
           align-items: center;
           padding: 0.75rem 1rem;
-          border-radius: 0 0 12px 12px;
-          margin-top: -4px;
+          border-radius: 12px 12px 0 0;
+          margin-bottom: -4px;
         }
 
         .dark .player-info-bar {
           background: rgba(15, 15, 30, 0.9);
           border: 1px solid rgba(255, 255, 255, 0.1);
-          border-top: none;
+          border-bottom: none;
         }
 
         .light .player-info-bar {
           background: rgba(255, 255, 255, 0.9);
           border: 1px solid rgba(0, 0, 0, 0.1);
-          border-top: none;
+          border-bottom: none;
         }
 
         .episode-info {
           display: flex;
           flex-direction: column;
           gap: 0.25rem;
+          flex: 1;
+          min-width: 0;
         }
 
         .episode-number {
           font-weight: 600;
           font-size: 1rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .episode-title {
           font-size: 0.9rem;
           opacity: 0.7;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .player-actions {
           display: flex;
           gap: 0.5rem;
+          flex-shrink: 0;
         }
 
         .player-actions button {
@@ -1315,15 +1228,31 @@ const Ongaku = () => {
           color: white;
         }
 
-        .player-settings {
-          background: rgba(0, 0, 0, 0.7);
-          border-radius: 8px;
-          padding: 1rem;
+        .player-settings-section {
+          padding: 1.5rem;
+          border-radius: 12px;
           margin-bottom: 1.5rem;
+        }
+
+        .dark .player-settings-section {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light .player-settings-section {
+          background: rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .settings-container {
+          max-width: 600px;
+          margin: 0 auto;
+          text-align: center;
         }
 
         .settings-row {
           display: flex;
+          justify-content: center;
           margin-bottom: 1rem;
         }
 
@@ -1366,128 +1295,6 @@ const Ongaku = () => {
           color: rgba(255, 255, 255, 0.7);
           font-size: 0.8rem;
           margin-top: 0.25rem;
-        }
-
-        .player-controls {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 1.5rem;
-          padding: 1.5rem;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
-        }
-
-        .dark .player-controls {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .light .player-controls {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .control-section {
-          flex: 1;
-          min-width: 200px;
-        }
-
-        .control-label {
-          font-size: 0.9rem;
-          font-weight: 600;
-          margin-bottom: 0.75rem;
-          opacity: 0.7;
-        }
-
-        .button-group {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .button-group button {
-          padding: 0.6rem 1.2rem;
-          border-radius: 8px;
-          border: none;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          font-weight: 500;
-          font-size: 0.9rem;
-        }
-
-        .dark .button-group button {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .light .button-group button {
-          background: rgba(0, 0, 0, 0.1);
-          color: #1a1a2e;
-          border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .button-group button:hover:not(:disabled) {
-          transform: translateY(-2px);
-        }
-
-        .button-group button.active {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border-color: transparent;
-        }
-
-        .button-group button:disabled {
-          opacity: 0.3;
-          cursor: not-allowed;
-        }
-
-        .nav-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .nav-btn.primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-          color: white !important;
-          border-color: transparent !important;
-        }
-
-        .episode-info-card {
-          padding: 1.5rem;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
-        }
-
-        .dark .episode-info-card {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .light .episode-info-card {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.5rem 0;
-        }
-
-        .info-row:not(:last-child) {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .label {
-          opacity: 0.7;
-          font-size: 0.9rem;
-        }
-
-        .value {
-          font-weight: 600;
         }
 
         .episodes-list-compact {
@@ -1658,11 +1465,6 @@ const Ongaku = () => {
             font-size: 1.8rem;
           }
 
-          .player-controls {
-            flex-direction: column;
-            gap: 1rem;
-          }
-
           .episodes-compact-grid {
             grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
           }
@@ -1675,6 +1477,10 @@ const Ongaku = () => {
             flex-direction: column;
             align-items: flex-start;
             gap: 0.5rem;
+          }
+
+          .settings-container {
+            max-width: 100%;
           }
         }
       `}</style>
