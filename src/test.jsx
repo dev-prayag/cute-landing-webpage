@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack } from 'lucide-react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack, User, Globe } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
@@ -49,6 +49,7 @@ const Ongaku = () => {
   const [activeView, setActiveView] = useState('home');
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [language, setLanguage] = useState('en');
   const iframeRef = useRef(null);
 
   useEffect(() => {
@@ -294,10 +295,6 @@ const Ongaku = () => {
 
   const WatchView = () => (
     <div className="watch-container">
-      <button className="back-btn" onClick={() => setActiveView('details')}>
-        <ArrowLeft size={20} /> Back to Episodes
-      </button>
-
       <div className={`video-wrapper ${isTheaterMode ? 'theater-mode' : ''}`}>
         <div className="video-container">
           <iframe
@@ -310,11 +307,30 @@ const Ongaku = () => {
           
           <div className="video-overlay">
             <div className="overlay-top">
-              <div className="episode-badge">
-                Episode {currentEpisodeIndex + 1}
-                {selectedEpisode?.isFiller && <span className="filler-tag">Filler</span>}
+              <div className="breadcrumb">
+                <span>Home</span>
+                <span>/</span>
+                <span>MOVIE</span>
+                <span>/</span>
+                <span>{animeDetails?.title || 'Anime'}</span>
+                <span>/</span>
+                <span>Episode {currentEpisodeIndex + 1}</span>
               </div>
               <div className="overlay-controls">
+                <button 
+                  onClick={() => toggleLike(animeDetails)}
+                  className={likedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
+                  title="Like"
+                >
+                  <Heart size={18} />
+                </button>
+                <button 
+                  onClick={() => toggleBookmark(animeDetails)}
+                  className={bookmarkedAnimes.some(a => a.id === animeDetails?.id) ? 'active' : ''}
+                  title="Bookmark"
+                >
+                  <Bookmark size={18} />
+                </button>
                 <button onClick={() => setIsTheaterMode(!isTheaterMode)} title="Theater Mode">
                   <Maximize size={18} />
                 </button>
@@ -431,6 +447,10 @@ const Ongaku = () => {
             </button>
           </div>
           <div className="nav-actions">
+            <button onClick={() => setLanguage(language === 'en' ? 'jp' : 'en')} className="nav-btn">
+              <Globe size={22} />
+              <span>{language.toUpperCase()}</span>
+            </button>
             <button onClick={() => setActiveView('liked')} className="nav-btn">
               <Heart size={22} />
               {likedAnimes.length > 0 && <span className="badge">{likedAnimes.length}</span>}
@@ -439,8 +459,8 @@ const Ongaku = () => {
               <Bookmark size={22} />
               {bookmarkedAnimes.length > 0 && <span className="badge">{bookmarkedAnimes.length}</span>}
             </button>
-            <button onClick={toggleTheme} className="theme-toggle">
-              {darkMode ? <Sun size={22} /> : <Moon size={22} />}
+            <button className="nav-btn">
+              <User size={22} />
             </button>
           </div>
         </div>
@@ -680,6 +700,9 @@ const Ongaku = () => {
           border-radius: 50%;
           transition: all 0.3s ease;
           color: inherit;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
         }
 
         .dark .nav-btn:hover, .dark .theme-toggle:hover {
@@ -1199,24 +1222,21 @@ const Ongaku = () => {
           pointer-events: auto;
         }
 
-        .episode-badge {
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(10px);
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          color: white;
-          font-size: 0.9rem;
-          font-weight: 600;
+        .breadcrumb {
           display: flex;
           align-items: center;
           gap: 0.5rem;
+          color: white;
+          font-size: 0.9rem;
         }
 
-        .filler-tag {
-          background: #ef4444;
-          padding: 0.15rem 0.5rem;
-          border-radius: 10px;
-          font-size: 0.75rem;
+        .breadcrumb span {
+          opacity: 0.8;
+        }
+
+        .breadcrumb span:last-child {
+          opacity: 1;
+          font-weight: 600;
         }
 
         .overlay-controls {
@@ -1238,6 +1258,10 @@ const Ongaku = () => {
         .overlay-controls button:hover {
           background: rgba(255, 255, 255, 0.2);
           transform: scale(1.1);
+        }
+
+        .overlay-controls button.active {
+          background: #f43f5e;
         }
 
         .player-controls {
@@ -1541,6 +1565,14 @@ const Ongaku = () => {
 
           .episodes-grid {
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          }
+
+          .breadcrumb {
+            font-size: 0.7rem;
+          }
+
+          .overlay-controls {
+            gap: 0.25rem;
           }
         }
       `}</style>
