@@ -1,7 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
+
+// API Cache with retry logic
+const apiCache = new Map();
+const fetchWithCache = async (url, retries = 2) => {
+  if (apiCache.has(url)) {
+    return apiCache.get(url);
+  }
+
+  let lastError;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        apiCache.set(url, data);
+        return data;
+      }
+      lastError = new Error('API returned unsuccessful response');
+    } catch (err) {
+      lastError = err;
+      if (i < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
+};
 
 const Ongaku = () => {
   const [darkMode, setDarkMode] = useState(true);
@@ -14,15 +41,15 @@ const Ongaku = () => {
   const [animeDetails, setAnimeDetails] = useState(null);
   const [episodes, setEpisodes] = useState([]);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
-  const [servers, setServers] = useState(null);
-  const [streamUrl, setStreamUrl] = useState(null);
-  const [selectedServer, setSelectedServer] = useState('HD-1');
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
   const [streamType, setStreamType] = useState('sub');
+  const [server, setServer] = useState('vidWish');
   const [likedAnimes, setLikedAnimes] = useState([]);
   const [bookmarkedAnimes, setBookmarkedAnimes] = useState([]);
   const [activeView, setActiveView] = useState('home');
-  const videoRef = useRef(null);
-  const hlsRef = useRef(null);
+  const [isTheaterMode, setIsTheaterMode] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const iframeRef = useRef(null);
 
   useEffect(() => {
     const liked = JSON.parse(localStorage.getItem('likedAnimes') || '[]');
@@ -47,37 +74,10 @@ const Ongaku = () => {
     }
   }, [selectedAnime, activeView]);
 
-  useEffect(() => {
-    if (selectedEpisode) {
-      fetchServers(selectedEpisode.id);
-    }
-  }, [selectedEpisode]);
-
-  useEffect(() => {
-    if (servers && selectedServer && selectedEpisode) {
-      fetchStreamUrl(selectedEpisode.id, selectedServer, streamType);
-    }
-  }, [servers, selectedServer, streamType]);
-
-  useEffect(() => {
-    if (streamUrl && videoRef.current) {
-      loadVideo(streamUrl);
-    }
-    return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-    };
-  }, [streamUrl]);
-
   const fetchHomeData = async () => {
     try {
-      const res = await fetch(`${API_BASE}/home`);
-      const data = await res.json();
-      if (data.success) {
-        setHomeData(data.data);
-      }
+      const data = await fetchWithCache(`${API_BASE}/home`);
+      setHomeData(data.data);
     } catch (err) {
       console.error('Error fetching home data:', err);
     } finally {
@@ -87,11 +87,8 @@ const Ongaku = () => {
 
   const fetchAnimeDetails = async (animeId) => {
     try {
-      const res = await fetch(`${API_BASE}/anime/${animeId}`);
-      const data = await res.json();
-      if (data.success) {
-        setAnimeDetails(data.data);
-      }
+      const data = await fetchWithCache(`${API_BASE}/anime/${animeId}`);
+      setAnimeDetails(data.data);
     } catch (err) {
       console.error('Error fetching anime details:', err);
     }
@@ -99,85 +96,10 @@ const Ongaku = () => {
 
   const fetchEpisodes = async (animeId) => {
     try {
-      const res = await fetch(`${API_BASE}/episodes/${animeId}`);
-      const data = await res.json();
-      if (data.success) {
-        setEpisodes(data.data);
-      }
+      const data = await fetchWithCache(`${API_BASE}/episodes/${animeId}`);
+      setEpisodes(data.data);
     } catch (err) {
       console.error('Error fetching episodes:', err);
-    }
-  };
-
-  const fetchServers = async (episodeId) => {
-    try {
-      const cleanEpisodeId = episodeId.replace('/watch/', '');
-      const res = await fetch(`${API_BASE}/servers?id=${cleanEpisodeId}`);
-      const data = await res.json();
-      if (data.success) {
-        setServers(data.data);
-        if (data.data.sub && data.data.sub.length > 0) {
-          setSelectedServer(data.data.sub[0].name);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching servers:', err);
-    }
-  };
-
-  const fetchStreamUrl = async (episodeId, server, type) => {
-    try {
-      const cleanEpisodeId = episodeId.replace('/watch/', '');
-      const res = await fetch(`${API_BASE}/stream?id=${cleanEpisodeId}&server=${server}&type=${type}`);
-      const data = await res.json();
-      if (data.success && data.data.streamingLink) {
-        setStreamUrl(data.data.streamingLink);
-      }
-    } catch (err) {
-      console.error('Error fetching stream URL:', err);
-    }
-  };
-
-  const loadVideo = (streamData) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-    }
-
-    const videoSrc = streamData.link?.file || streamData.sources?.[0]?.file;
-    
-    if (!videoSrc) {
-      console.error('No video source found');
-      return;
-    }
-
-    if (window.Hls && window.Hls.isSupported()) {
-      const hls = new window.Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90
-      });
-      
-      hlsRef.current = hls;
-      hls.loadSource(videoSrc);
-      hls.attachMedia(video);
-      
-      hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(e => console.log('Autoplay prevented:', e));
-      });
-
-      hls.on(window.Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          console.error('HLS Error:', data);
-        }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = videoSrc;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().catch(e => console.log('Autoplay prevented:', e));
-      });
     }
   };
 
@@ -186,12 +108,9 @@ const Ongaku = () => {
     
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/search?keyword=${encodeURIComponent(searchQuery)}&page=1`);
-      const data = await res.json();
-      if (data.success) {
-        setSearchResults(data.data.response);
-        setActiveView('search');
-      }
+      const data = await fetchWithCache(`${API_BASE}/search?keyword=${encodeURIComponent(searchQuery)}&page=1`);
+      setSearchResults(data.data.response);
+      setActiveView('search');
     } catch (err) {
       console.error('Error searching:', err);
     } finally {
@@ -223,11 +142,25 @@ const Ongaku = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleEpisodeSelect = (episode) => {
+  const handleEpisodeSelect = (episode, index) => {
     setSelectedEpisode(episode);
+    setCurrentEpisodeIndex(index);
     setActiveView('watch');
-    setServers(null);
-    setStreamUrl(null);
+  };
+
+  const changeEpisode = (direction) => {
+    const newIndex = direction === 'next' ? currentEpisodeIndex + 1 : currentEpisodeIndex - 1;
+    if (newIndex >= 0 && newIndex < episodes.length) {
+      setSelectedEpisode(episodes[newIndex]);
+      setCurrentEpisodeIndex(newIndex);
+    }
+  };
+
+  const getStreamUrl = () => {
+    if (!selectedEpisode) return '';
+    const episodeNum = selectedEpisode.id.split('ep=').pop();
+    const baseUrl = server === 'vidWish' ? 'vidwish.live' : 'megaplay.buzz';
+    return `https://${baseUrl}/stream/s-2/${episodeNum}/${streamType}`;
   };
 
   const AnimeCard = ({ anime, index }) => (
@@ -240,7 +173,7 @@ const Ongaku = () => {
       }}
     >
       <div className="anime-card-inner">
-        <img src={anime.poster} alt={anime.title} />
+        <img src={anime.poster} alt={anime.title} loading="lazy" />
         <div className="anime-overlay">
           <Play className="play-icon" />
         </div>
@@ -273,7 +206,7 @@ const Ongaku = () => {
     <div className="spotlight-section">
       {homeData?.spotlight?.slice(0, 5).map((anime, i) => (
         <div key={i} className="spotlight-item" style={{ animationDelay: `${i * 0.2}s` }}>
-          <img src={anime.poster} alt={anime.title} />
+          <img src={anime.poster} alt={anime.title} loading="lazy" />
           <div className="spotlight-content">
             <span className="rank">#{anime.rank}</span>
             <h2>{anime.title}</h2>
@@ -303,7 +236,7 @@ const Ongaku = () => {
       
       {animeDetails && (
         <div className="details-header">
-          <img src={animeDetails.poster} alt={animeDetails.title} className="details-poster" />
+          <img src={animeDetails.poster} alt={animeDetails.title} className="details-poster" loading="lazy" />
           <div className="details-info">
             <h1>{animeDetails.title}</h1>
             <p className="alternative-title">{animeDetails.alternativeTitle}</p>
@@ -338,17 +271,20 @@ const Ongaku = () => {
       )}
 
       <div className="episodes-section">
-        <h2>Episodes</h2>
+        <h2>Episodes ({episodes.length})</h2>
         <div className="episodes-grid">
           {episodes.map((ep, i) => (
             <div 
               key={i} 
               className="episode-card"
-              onClick={() => handleEpisodeSelect(ep)}
+              onClick={() => handleEpisodeSelect(ep, i)}
             >
               <Play size={16} />
-              <span>Episode {i + 1}</span>
-              {ep.title && <small>{ep.title}</small>}
+              <div className="episode-info">
+                <span>Episode {i + 1}</span>
+                {ep.title && <small>{ep.title}</small>}
+                {ep.isFiller && <span className="filler-badge">Filler</span>}
+              </div>
             </div>
           ))}
         </div>
@@ -362,62 +298,112 @@ const Ongaku = () => {
         <ArrowLeft size={20} /> Back to Episodes
       </button>
 
-      <div className="video-section">
-        <video 
-          ref={videoRef}
-          controls
-          className="video-player"
-          poster={selectedAnime?.poster}
-        />
-      </div>
-
-      {servers && (
-        <div className="server-controls">
-          <div className="control-group">
-            <label>Type:</label>
-            <div className="button-group">
-              <button 
-                className={streamType === 'sub' ? 'active' : ''}
-                onClick={() => setStreamType('sub')}
-                disabled={!servers.sub || servers.sub.length === 0}
-              >
-                SUB
-              </button>
-              <button 
-                className={streamType === 'dub' ? 'active' : ''}
-                onClick={() => setStreamType('dub')}
-                disabled={!servers.dub || servers.dub.length === 0}
-              >
-                DUB
-              </button>
-            </div>
-          </div>
-
-          <div className="control-group">
-            <label>Server:</label>
-            <div className="button-group">
-              {servers[streamType]?.map((server) => (
-                <button
-                  key={server.name}
-                  className={selectedServer === server.name ? 'active' : ''}
-                  onClick={() => setSelectedServer(server.name)}
-                >
-                  {server.name}
+      <div className={`video-wrapper ${isTheaterMode ? 'theater-mode' : ''}`}>
+        <div className="video-container">
+          <iframe
+            ref={iframeRef}
+            src={getStreamUrl()}
+            className="video-player"
+            allowFullScreen
+            allow="autoplay; encrypted-media; picture-in-picture"
+          />
+          
+          <div className="video-overlay">
+            <div className="overlay-top">
+              <div className="episode-badge">
+                Episode {currentEpisodeIndex + 1}
+                {selectedEpisode?.isFiller && <span className="filler-tag">Filler</span>}
+              </div>
+              <div className="overlay-controls">
+                <button onClick={() => setIsTheaterMode(!isTheaterMode)} title="Theater Mode">
+                  <Maximize size={18} />
                 </button>
-              ))}
+                <button onClick={() => setShowSettings(!showSettings)} title="Settings">
+                  <Settings size={18} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      <div className="player-controls">
+        <div className="control-section">
+          <div className="control-label">Server</div>
+          <div className="button-group">
+            <button
+              className={server === 'vidWish' ? 'active' : ''}
+              onClick={() => setServer('vidWish')}
+            >
+              VidWish
+            </button>
+            <button
+              className={server === 'megaPlay' ? 'active' : ''}
+              onClick={() => setServer('megaPlay')}
+            >
+              MegaPlay
+            </button>
+          </div>
+        </div>
+
+        <div className="control-section">
+          <div className="control-label">Audio</div>
+          <div className="button-group">
+            <button
+              className={streamType === 'sub' ? 'active' : ''}
+              onClick={() => setStreamType('sub')}
+            >
+              SUB
+            </button>
+            <button
+              className={streamType === 'dub' ? 'active' : ''}
+              onClick={() => setStreamType('dub')}
+            >
+              DUB
+            </button>
+          </div>
+        </div>
+
+        <div className="control-section">
+          <div className="control-label">Episode</div>
+          <div className="button-group">
+            {currentEpisodeIndex > 0 && (
+              <button onClick={() => changeEpisode('prev')} className="nav-btn">
+                <SkipBack size={16} /> Previous
+              </button>
+            )}
+            {currentEpisodeIndex < episodes.length - 1 && (
+              <button onClick={() => changeEpisode('next')} className="nav-btn primary">
+                Next <SkipForward size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="episode-info-card">
+        <div className="info-row">
+          <span className="label">Now Watching:</span>
+          <span className="value">Episode {currentEpisodeIndex + 1} of {episodes.length}</span>
+        </div>
+        <div className="info-row">
+          <span className="label">Server:</span>
+          <span className="value">{server === 'vidWish' ? 'VidWish' : 'MegaPlay'}</span>
+        </div>
+        <div className="info-row">
+          <span className="label">Audio:</span>
+          <span className="value">{streamType.toUpperCase()}</span>
+        </div>
+      </div>
 
       <div className="episodes-list-compact">
-        <h3>Episodes</h3>
+        <h3>All Episodes</h3>
         <div className="episodes-compact-grid">
           {episodes.map((ep, i) => (
             <button
               key={i}
-              className={`episode-btn ${selectedEpisode?.id === ep.id ? 'active' : ''}`}
-              onClick={() => handleEpisodeSelect(ep)}
+              className={`episode-btn ${i === currentEpisodeIndex ? 'active' : ''}`}
+              onClick={() => handleEpisodeSelect(ep, i)}
             >
               {i + 1}
             </button>
@@ -429,13 +415,10 @@ const Ongaku = () => {
 
   return (
     <div className={`app ${darkMode ? 'dark' : 'light'}`}>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
-      
       <nav className="navbar">
         <div className="nav-container">
-          <h1 className="logo" onClick={() => setActiveView('home')}>音楽子</h1>
+          <h1 className="logo" onClick={() => setActiveView('home')}>AnimeStream</h1>
           <div className="search-bar">
-            <Search size={20} />
             <input
               type="text"
               placeholder="Search anime..."
@@ -466,7 +449,7 @@ const Ongaku = () => {
       <main className="main-content">
         {loading ? (
           <div className="loader-container">
-            <div className="loader"></div>
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' stroke='%23667eea' stroke-width='8' fill='none' stroke-dasharray='63 188' stroke-linecap='round'%3E%3CanimateTransform attributeName='transform' type='rotate' repeatCount='indefinite' dur='1s' values='0 50 50;360 50 50' keyTimes='0;1'/%3E%3C/circle%3E%3C/svg%3E" alt="Loading..." className="loader" />
           </div>
         ) : (
           <>
@@ -615,6 +598,7 @@ const Ongaku = () => {
           -webkit-text-fill-color: transparent;
           cursor: pointer;
           transition: transform 0.3s ease;
+          white-space: nowrap;
         }
 
         .logo:hover {
@@ -1074,8 +1058,25 @@ const Ongaku = () => {
 
         .episodes-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
           gap: 1rem;
+          max-height: 60vh;
+          overflow-y: auto;
+          padding-right: 0.5rem;
+        }
+
+        .episodes-grid::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .episodes-grid::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+
+        .episodes-grid::-webkit-scrollbar-thumb {
+          background: rgba(102, 126, 234, 0.5);
+          border-radius: 10px;
         }
 
         .episode-card {
@@ -1111,57 +1112,163 @@ const Ongaku = () => {
           background: rgba(0, 0, 0, 0.1);
         }
 
-        .episode-card small {
-          display: block;
+        .episode-info {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .episode-info small {
           opacity: 0.7;
           font-size: 0.85rem;
-          margin-top: 0.25rem;
+        }
+
+        .filler-badge {
+          display: inline-block;
+          background: #ef4444;
+          color: white;
+          padding: 0.15rem 0.5rem;
+          border-radius: 10px;
+          font-size: 0.7rem;
+          font-weight: bold;
         }
 
         .watch-container {
           animation: fadeInUp 0.6s ease-out;
         }
 
-        .video-section {
+        .video-wrapper {
           margin-bottom: 2rem;
+        }
+
+        .video-wrapper.theater-mode {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 200;
+          background: #000;
+          margin: 0;
+        }
+
+        .video-container {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 16/9;
+          background: #000;
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
         }
 
+        .theater-mode .video-container {
+          height: 100vh;
+          border-radius: 0;
+        }
+
         .video-player {
           width: 100%;
-          aspect-ratio: 16/9;
-          background: #000;
+          height: 100%;
+          border: none;
         }
 
-        .server-controls {
+        .video-overlay {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+
+        .video-container:hover .video-overlay {
+          opacity: 1;
+        }
+
+        .overlay-top {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          padding: 1rem;
           display: flex;
-          gap: 2rem;
-          margin-bottom: 2rem;
+          justify-content: space-between;
+          align-items: center;
+          background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
+          pointer-events: auto;
+        }
+
+        .episode-badge {
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(10px);
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          color: white;
+          font-size: 0.9rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .filler-tag {
+          background: #ef4444;
+          padding: 0.15rem 0.5rem;
+          border-radius: 10px;
+          font-size: 0.75rem;
+        }
+
+        .overlay-controls {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .overlay-controls button {
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(10px);
+          border: none;
+          padding: 0.5rem;
+          border-radius: 50%;
+          color: white;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .overlay-controls button:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: scale(1.1);
+        }
+
+        .player-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 1.5rem;
           padding: 1.5rem;
           border-radius: 12px;
+          margin-bottom: 1.5rem;
         }
 
-        .dark .server-controls {
+        .dark .player-controls {
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .light .server-controls {
+        .light .player-controls {
           background: rgba(0, 0, 0, 0.05);
           border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
-        .control-group {
+        .control-section {
           flex: 1;
+          min-width: 200px;
         }
 
-        .control-group label {
-          display: block;
-          margin-bottom: 0.75rem;
-          font-weight: 600;
+        .control-label {
           font-size: 0.9rem;
+          font-weight: 600;
+          margin-bottom: 0.75rem;
+          opacity: 0.7;
         }
 
         .button-group {
@@ -1171,22 +1278,25 @@ const Ongaku = () => {
         }
 
         .button-group button {
-          padding: 0.5rem 1rem;
+          padding: 0.6rem 1.2rem;
           border-radius: 8px;
           border: none;
           cursor: pointer;
           transition: all 0.3s ease;
           font-weight: 500;
+          font-size: 0.9rem;
         }
 
         .dark .button-group button {
           background: rgba(255, 255, 255, 0.1);
           color: white;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .light .button-group button {
           background: rgba(0, 0, 0, 0.1);
           color: #1a1a2e;
+          border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .button-group button:hover:not(:disabled) {
@@ -1196,11 +1306,60 @@ const Ongaku = () => {
         .button-group button.active {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
+          border-color: transparent;
         }
 
         .button-group button:disabled {
           opacity: 0.3;
           cursor: not-allowed;
+        }
+
+        .nav-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .nav-btn.primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+          color: white !important;
+          border-color: transparent !important;
+        }
+
+        .episode-info-card {
+          padding: 1.5rem;
+          border-radius: 12px;
+          margin-bottom: 1.5rem;
+        }
+
+        .dark .episode-info-card {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light .episode-info-card {
+          background: rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.5rem 0;
+        }
+
+        .info-row:not(:last-child) {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .label {
+          opacity: 0.7;
+          font-size: 0.9rem;
+        }
+
+        .value {
+          font-weight: 600;
         }
 
         .episodes-list-compact {
@@ -1220,12 +1379,30 @@ const Ongaku = () => {
 
         .episodes-list-compact h3 {
           margin-bottom: 1rem;
+          font-size: 1.2rem;
         }
 
         .episodes-compact-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
           gap: 0.5rem;
+          max-height: 40vh;
+          overflow-y: auto;
+          padding-right: 0.5rem;
+        }
+
+        .episodes-compact-grid::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .episodes-compact-grid::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+
+        .episodes-compact-grid::-webkit-scrollbar-thumb {
+          background: rgba(102, 126, 234, 0.5);
+          border-radius: 10px;
         }
 
         .episode-btn {
@@ -1240,11 +1417,13 @@ const Ongaku = () => {
         .dark .episode-btn {
           background: rgba(255, 255, 255, 0.1);
           color: white;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .light .episode-btn {
           background: rgba(0, 0, 0, 0.1);
           color: #1a1a2e;
+          border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .episode-btn:hover {
@@ -1254,6 +1433,7 @@ const Ongaku = () => {
         .episode-btn.active {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
+          border-color: transparent;
         }
 
         .back-to-top {
@@ -1273,6 +1453,7 @@ const Ongaku = () => {
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
           animation: fadeInUp 0.3s ease-out;
           transition: all 0.3s ease;
+          z-index: 90;
         }
 
         .back-to-top:hover {
@@ -1288,17 +1469,19 @@ const Ongaku = () => {
         }
 
         .loader {
-          width: 50px;
-          height: 50px;
-          border: 4px solid rgba(102, 126, 234, 0.2);
-          border-top-color: #667eea;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
+          width: 80px;
+          height: 80px;
+          animation: pulse 1.5s ease-in-out infinite;
         }
 
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: scale(0.95);
           }
         }
 
@@ -1321,6 +1504,10 @@ const Ongaku = () => {
             max-width: 100%;
           }
 
+          .spotlight-content {
+            padding: 2rem;
+          }
+
           .spotlight-content h2 {
             font-size: 1.5rem;
           }
@@ -1339,13 +1526,21 @@ const Ongaku = () => {
             margin: 0 auto;
           }
 
-          .server-controls {
+          .details-info h1 {
+            font-size: 1.8rem;
+          }
+
+          .player-controls {
             flex-direction: column;
             gap: 1rem;
           }
 
           .episodes-compact-grid {
             grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+          }
+
+          .episodes-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
           }
         }
       `}</style>
