@@ -1,11 +1,6 @@
-import React from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
-import Ongaku from './test'; // Assuming Ongaku is in ./test.jsx or adjust path
+import React from 'react'
+import Ongaku from './test'
 
 export default function App() {
-  return (
-    <Router basename="/ongaku">
-      <Ongaku />
-    </Router>
-  );
+  return <Ongaku />
 }
