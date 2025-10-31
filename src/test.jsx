@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, ChevronLeft, ChevronRight, Mic, List, Grid3x3 } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
@@ -29,7 +29,54 @@ const fetchWithCache = async (url, retries = 2) => {
   throw lastError;
 };
 
-const Ongaku = () => {
+const AnimeCard = React.memo(({ anime, index, rank, onClick }) => (
+  <div 
+    className="anime-card"
+    style={{ animationDelay: `${index * 0.1}s` }}
+    onClick={onClick}
+  >
+    {rank && <div className="rank-badge">{rank}</div>}
+    <div className="anime-card-inner">
+      <img src={anime.poster} alt={anime.title} loading="lazy" />
+      <div className="anime-overlay">
+        <Play className="play-icon" />
+      </div>
+    </div>
+    <div className="anime-info">
+      <h3>{anime.title}</h3>
+      <div className="anime-meta">
+        {anime.episodes && <span>EP {anime.episodes.eps || anime.episodes.sub}</span>}
+        {anime.type && <span>{anime.type}</span>}
+      </div>
+    </div>
+  </div>
+));
+
+const EpisodeCard = React.memo(({ episode, actualIndex, isActive, listView, onClick }) => (
+  <div 
+    className={`episode-card ${isActive ? 'active' : ''}`}
+    onClick={onClick}
+  >
+    {listView === 'grid' ? (
+      <>
+        <Play size={16} />
+        <span className="ep-number">{actualIndex + 1}</span>
+        {episode.isFiller && <span className="filler-badge">Filler</span>}
+      </>
+    ) : (
+      <div className="episode-list-content">
+        <Play size={16} />
+        <div className="episode-text">
+          <span className="ep-number">Episode {actualIndex + 1}</span>
+          {episode.title && <span className="ep-title">{episode.title}</span>}
+        </div>
+        {episode.isFiller && <span className="filler-badge">Filler</span>}
+      </div>
+    )}
+  </div>
+));
+
+const App = () => {
   const [darkMode, setDarkMode] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [homeData, setHomeData] = useState(null);
@@ -61,9 +108,10 @@ const Ongaku = () => {
 
   useEffect(() => {
     const handleScroll = () => {
-      setShowBackToTop(window.scrollY > 400);
+      const shouldShow = window.scrollY > 400;
+      setShowBackToTop(prev => prev !== shouldShow ? shouldShow : prev);
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -72,7 +120,7 @@ const Ongaku = () => {
       fetchAnimeDetails(selectedAnime.id);
       fetchEpisodes(selectedAnime.id);
     }
-  }, [selectedAnime, activeView]);
+  }, [selectedAnime?.id, activeView]);
 
   const fetchHomeData = async () => {
     try {
@@ -103,7 +151,7 @@ const Ongaku = () => {
     }
   };
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     
     setLoading(true);
@@ -116,91 +164,80 @@ const Ongaku = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery]);
 
-  const toggleTheme = () => setDarkMode(!darkMode);
+  const toggleTheme = useCallback(() => setDarkMode(prev => !prev), []);
 
-  const toggleLike = (anime) => {
-    const updated = likedAnimes.some(a => a.id === anime.id)
-      ? likedAnimes.filter(a => a.id !== anime.id)
-      : [...likedAnimes, anime];
-    setLikedAnimes(updated);
-    localStorage.setItem('likedAnimes', JSON.stringify(updated));
-  };
+  const toggleLike = useCallback((anime) => {
+    setLikedAnimes(prev => {
+      const updated = prev.some(a => a.id === anime.id)
+        ? prev.filter(a => a.id !== anime.id)
+        : [...prev, anime];
+      localStorage.setItem('likedAnimes', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
-  const toggleBookmark = (anime) => {
-    const updated = bookmarkedAnimes.some(a => a.id === anime.id)
-      ? bookmarkedAnimes.filter(a => a.id !== anime.id)
-      : [...bookmarkedAnimes, anime];
-    setBookmarkedAnimes(updated);
-    localStorage.setItem('bookmarkedAnimes', JSON.stringify(updated));
-  };
+  const toggleBookmark = useCallback((anime) => {
+    setBookmarkedAnimes(prev => {
+      const updated = prev.some(a => a.id === anime.id)
+        ? prev.filter(a => a.id !== anime.id)
+        : [...prev, anime];
+      localStorage.setItem('bookmarkedAnimes', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollToTop = useCallback(() => window.scrollTo({ top: 0, behavior: 'smooth' }), []);
 
-  const handleEpisodeSelect = (episode, index) => {
+  const handleEpisodeSelect = useCallback((episode, index) => {
     setSelectedEpisode(episode);
     setCurrentEpisodeIndex(index);
     setActiveView('watch');
-  };
+  }, []);
 
-  const changeEpisode = (direction) => {
-    const newIndex = direction === 'next' ? currentEpisodeIndex + 1 : currentEpisodeIndex - 1;
-    if (newIndex >= 0 && newIndex < episodes.length) {
-      setSelectedEpisode(episodes[newIndex]);
-      setCurrentEpisodeIndex(newIndex);
-    }
-  };
+  const changeEpisode = useCallback((direction) => {
+    setCurrentEpisodeIndex(prev => {
+      const newIndex = direction === 'next' ? prev + 1 : prev - 1;
+      if (newIndex >= 0 && newIndex < episodes.length) {
+        setSelectedEpisode(episodes[newIndex]);
+        return newIndex;
+      }
+      return prev;
+    });
+  }, [episodes]);
 
-  const getStreamUrl = () => {
+  const getStreamUrl = useCallback(() => {
     if (!selectedEpisode) return '';
     const episodeNum = selectedEpisode.id.split('ep=').pop();
     const baseUrl = server === 'vidWish' ? 'vidwish.live' : 'megaplay.buzz';
     return `https://${baseUrl}/stream/s-2/${episodeNum}/${streamType}`;
-  };
+  }, [selectedEpisode, server, streamType]);
 
-  const nextSpotlight = () => {
+  const nextSpotlight = useCallback(() => {
     setSpotlightIndex((prev) => (prev + 1) % (homeData?.spotlight?.length || 1));
-  };
+  }, [homeData?.spotlight?.length]);
 
-  const prevSpotlight = () => {
+  const prevSpotlight = useCallback(() => {
     setSpotlightIndex((prev) => (prev - 1 + (homeData?.spotlight?.length || 1)) % (homeData?.spotlight?.length || 1));
-  };
+  }, [homeData?.spotlight?.length]);
 
-  const filteredEpisodes = episodes.filter(ep => {
+  const filteredEpisodes = useMemo(() => {
+    if (!episodeSearch) return episodes;
     const searchLower = episodeSearch.toLowerCase();
-    const epNum = episodes.indexOf(ep) + 1;
-    return epNum.toString().includes(episodeSearch) || 
-           (ep.title && ep.title.toLowerCase().includes(searchLower));
-  });
+    return episodes.filter((ep, idx) => {
+      const epNum = idx + 1;
+      return epNum.toString().includes(episodeSearch) || 
+             (ep.title && ep.title.toLowerCase().includes(searchLower));
+    });
+  }, [episodes, episodeSearch]);
 
-  const AnimeCard = ({ anime, index, rank }) => (
-    <div 
-      className="anime-card"
-      style={{ animationDelay: `${index * 0.1}s` }}
-      onClick={() => {
-        setSelectedAnime(anime);
-        setActiveView('details');
-      }}
-    >
-      {rank && <div className="rank-badge">{rank}</div>}
-      <div className="anime-card-inner">
-        <img src={anime.poster} alt={anime.title} loading="lazy" />
-        <div className="anime-overlay">
-          <Play className="play-icon" />
-        </div>
-      </div>
-      <div className="anime-info">
-        <h3>{anime.title}</h3>
-        <div className="anime-meta">
-          {anime.episodes && <span>EP {anime.episodes.eps || anime.episodes.sub}</span>}
-          {anime.type && <span>{anime.type}</span>}
-        </div>
-      </div>
-    </div>
-  );
+  const handleAnimeClick = useCallback((anime) => {
+    setSelectedAnime(anime);
+    setActiveView('details');
+  }, []);
 
-  const SpotlightSection = () => {
+  const SpotlightSection = React.memo(() => {
     const anime = homeData?.spotlight?.[spotlightIndex];
     if (!anime) return null;
 
@@ -217,6 +254,285 @@ const Ongaku = () => {
               <div className="spotlight-badges">
                 <span className="quality-badge">{anime.quality}</span>
                 <span className="type-badge">{anime.type}</span>
+              </div>
+              <h1 className="spotlight-title">{anime.title}</h1>
+              <p className="spotlight-synopsis">{anime.synopsis?.slice(0, 200)}...</p>
+              <div className="spotlight-meta">
+                <span><Calendar size={16} /> {anime.aired}</span>
+                <span><Clock size={16} /> {anime.duration}</span>
+              </div>
+              <div className="spotlight-actions">
+                <button className="play-button" onClick={() => handleAnimeClick(anime)}>
+                  <Play size={20} /> Watch Now
+                </button>
+                <button 
+                  className={`icon-button ${bookmarkedAnimes.some(a => a.id === anime.id) ? 'active' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); toggleBookmark(anime); }}
+                >
+                  <Bookmark size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button className="carousel-btn next" onClick={nextSpotlight}>
+          <ChevronRight size={32} />
+        </button>
+
+        <div className="carousel-indicators">
+          {homeData?.spotlight?.slice(0, 10).map((_, idx) => (
+            <button
+              key={idx}
+              className={`indicator ${idx === spotlightIndex ? 'active' : ''}`}
+              onClick={() => setSpotlightIndex(idx)}
+            />
+          ))}
+          <span className="indicator-text">{spotlightIndex + 1} / 10</span>
+        </div>
+      </div>
+    );
+  });
+
+  const TrendingSection = React.memo(() => (
+    <div className="trending-carousel">
+      <div className="carousel-scroll">
+        {homeData?.trending?.slice(0, 10).map((anime, i) => (
+          <div key={anime.id} className="trending-card" onClick={() => handleAnimeClick(anime)}>
+            <div className="trending-rank">{i + 1}</div>
+            <img src={anime.poster} alt={anime.title} loading="lazy" />
+            <div className="trending-overlay">
+              <h3>{anime.title}</h3>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ));
+
+  const AnimeDetailsView = () => (
+    <div className="anime-details">
+      <button className="back-btn" onClick={() => setActiveView('home')}>
+        <ArrowLeft size={20} /> Back
+      </button>
+      
+      {animeDetails && (
+        <div className="details-header">
+          <img src={animeDetails.poster} alt={animeDetails.title} className="details-poster" loading="lazy" />
+          <div className="details-info">
+            <h1>{animeDetails.title}</h1>
+            <p className="alternative-title">{animeDetails.alternativeTitle}</p>
+            <div className="details-meta">
+              <span className="rating">{animeDetails.rating}</span>
+              <span>{animeDetails.type}</span>
+              <span>{animeDetails.status}</span>
+              <span><Star size={14} /> {animeDetails.MAL_score}</span>
+            </div>
+            <p className="synopsis">{animeDetails.synopsis}</p>
+            <div className="genres">
+              {animeDetails.genres?.map((genre, i) => (
+                <span key={i} className="genre-tag">{genre}</span>
+              ))}
+            </div>
+            <div className="action-buttons">
+              <button 
+                className={`action-btn ${likedAnimes.some(a => a.id === animeDetails.id) ? 'active' : ''}`}
+                onClick={() => toggleLike(animeDetails)}
+              >
+                <Heart size={20} /> {likedAnimes.some(a => a.id === animeDetails.id) ? 'Liked' : 'Like'}
+              </button>
+              <button 
+                className={`action-btn ${bookmarkedAnimes.some(a => a.id === animeDetails.id) ? 'active' : ''}`}
+                onClick={() => toggleBookmark(animeDetails)}
+              >
+                <Bookmark size={20} /> {bookmarkedAnimes.some(a => a.id === animeDetails.id) ? 'Bookmarked' : 'Bookmark'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="episodes-section">
+        <div className="episodes-header">
+          <h2>All Episodes ({episodes.length})</h2>
+          <div className="episodes-controls">
+            <input
+              type="text"
+              placeholder="Find episode..."
+              value={episodeSearch}
+              onChange={(e) => setEpisodeSearch(e.target.value)}
+              className="episode-search-input"
+            />
+            <button 
+              className="view-toggle"
+              onClick={() => setEpisodeListView(prev => prev === 'grid' ? 'list' : 'grid')}
+            >
+              {episodeListView === 'grid' ? <List size={20} /> : <Grid3x3 size={20} />}
+            </button>
+          </div>
+        </div>
+        
+        <div className={`episodes-grid ${episodeListView}`}>
+          {filteredEpisodes.map((ep) => {
+            const actualIndex = episodes.indexOf(ep);
+            return (
+              <EpisodeCard
+                key={ep.id}
+                episode={ep}
+                actualIndex={actualIndex}
+                isActive={false}
+                listView={episodeListView}
+                onClick={() => handleEpisodeSelect(ep, actualIndex)}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const WatchView = () => {
+    const currentEp = episodes[currentEpisodeIndex];
+    const isLiked = selectedAnime && likedAnimes.some(a => a.id === selectedAnime.id);
+    const isBookmarked = selectedAnime && bookmarkedAnimes.some(a => a.id === selectedAnime.id);
+
+    return (
+      <div className="watch-container">
+        <button className="back-btn" onClick={() => setActiveView('details')}>
+          <ArrowLeft size={20} /> Back to Episodes
+        </button>
+
+        <div className="video-wrapper">
+          <div className="episode-header">
+            <div className="episode-title-section">
+              <span className="ep-number-badge">{currentEpisodeIndex + 1}.</span>
+              <span className="ep-name">{currentEp?.title || `Episode ${currentEpisodeIndex + 1}`}</span>
+            </div>
+            <div className="episode-actions">
+              <button 
+                className={`icon-btn ${isLiked ? 'liked' : ''}`}
+                onClick={() => selectedAnime && toggleLike(selectedAnime)}
+                title={isLiked ? 'Unlike' : 'Like'}
+              >
+                <Heart size={20} fill={isLiked ? '#ec4899' : 'none'} stroke={isLiked ? '#ec4899' : 'currentColor'} />
+              </button>
+              <button 
+                className={`icon-btn ${isBookmarked ? 'bookmarked' : ''}`}
+                onClick={() => selectedAnime && toggleBookmark(selectedAnime)}
+                title={isBookmarked ? 'Remove Bookmark' : 'Bookmark'}
+              >
+                <Bookmark size={20} fill={isBookmarked ? '#10b981' : 'none'} stroke={isBookmarked ? '#10b981' : 'currentColor'} />
+              </button>
+            </div>
+          </div>
+
+          <div className="video-container">
+            <iframe
+              key={getStreamUrl()}
+              ref={iframeRef}
+              src={getStreamUrl()}
+              className="video-player"
+              allowFullScreen
+              allow="autoplay; encrypted-media; picture-in-picture"
+            />
+          </div>
+        </div>
+
+        <div className="player-controls-center">
+          <div className="control-row">
+            <div className="audio-selector">
+              <button 
+                className={streamType === 'sub' ? 'active' : ''}
+                onClick={() => setStreamType('sub')}
+              >
+                <Mic size={16} /> SUB
+              </button>
+              <button 
+                className={streamType === 'dub' ? 'active' : ''}
+                onClick={() => setStreamType('dub')}
+              >
+                <Mic size={16} /> DUB
+              </button>
+            </div>
+
+            <div className="server-selector">
+              <button
+                className={server === 'vidWish' ? 'active' : ''}
+                onClick={() => setServer('vidWish')}
+              >
+                VidWish
+              </button>
+              <button
+                className={server === 'megaPlay' ? 'active' : ''}
+                onClick={() => setServer('megaPlay')}
+              >
+                MegaPlay
+              </button>
+            </div>
+
+            <div className="episode-nav">
+              {currentEpisodeIndex > 0 && (
+                <button onClick={() => changeEpisode('prev')} className="nav-btn">
+                  Previous
+                </button>
+              )}
+              {currentEpisodeIndex < episodes.length - 1 && (
+                <button onClick={() => changeEpisode('next')} className="nav-btn primary">
+                  Next
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="player-info">
+            <p>You are watching <strong>Episode {currentEpisodeIndex + 1}</strong></p>
+            <p className="server-info">Please try changing servers if this server isn't loading anything.</p>
+          </div>
+        </div>
+
+        <div className="episodes-section">
+          <div className="episodes-header">
+            <h2>All Episodes ({episodes.length})</h2>
+            <div className="episodes-controls">
+              <input
+                type="text"
+                placeholder="Find episode..."
+                value={episodeSearch}
+                onChange={(e) => setEpisodeSearch(e.target.value)}
+                className="episode-search-input"
+              />
+              <button 
+                className="view-toggle"
+                onClick={() => setEpisodeListView(prev => prev === 'grid' ? 'list' : 'grid')}
+              >
+                {episodeListView === 'grid' ? <List size={20} /> : <Grid3x3 size={20} />}
+              </button>
+            </div>
+          </div>
+          
+          <div className={`episodes-grid ${episodeListView}`}>
+            {filteredEpisodes.map((ep) => {
+              const actualIndex = episodes.indexOf(ep);
+              const isActive = actualIndex === currentEpisodeIndex;
+              return (
+                <EpisodeCard
+                  key={ep.id}
+                  episode={ep}
+                  actualIndex={actualIndex}
+                  isActive={isActive}
+                  listView={episodeListView}
+                  onClick={() => handleEpisodeSelect(ep, actualIndex)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className={`app ${darkMode ? 'dark' : 'light'}`}>type}</span>
               </div>
               <h1 className="spotlight-title">{anime.title}</h1>
               <p className="spotlight-synopsis">{anime.synopsis?.slice(0, 200)}...</p>
@@ -1603,7 +1919,6 @@ const Ongaku = () => {
           border: none;
         }
 
-        /* Player Controls */
         .player-controls-center {
           display: flex;
           flex-direction: column;
@@ -1849,4 +2164,4 @@ const Ongaku = () => {
   );
 };
 
-export default Ongaku;
+export default App;
