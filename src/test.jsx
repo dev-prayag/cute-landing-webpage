@@ -428,9 +428,8 @@ const Ongaku = () => {
 
           <div className="video-container">
             <iframe
-              key={getStreamUrl()}
               ref={iframeRef}
-              src={getStreamUrl()}
+              src={streamUrl}
               className="video-player"
               allowFullScreen
               allow="autoplay; encrypted-media; picture-in-picture"
@@ -728,7 +727,7 @@ const Ongaku = () => {
           <div className="video-container">
             <iframe
               ref={iframeRef}
-              src={getStreamUrl()}
+              src={streamUrl}
               className="video-player"
               allowFullScreen
               allow="autoplay; encrypted-media; picture-in-picture"
