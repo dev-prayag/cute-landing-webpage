@@ -76,7 +76,7 @@ const EpisodeCard = React.memo(({ episode, actualIndex, isActive, listView, onCl
   </div>
 ));
 
-const App = () => {
+const Ongaku = () => {
   const [darkMode, setDarkMode] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [homeData, setHomeData] = useState(null);
@@ -2164,4 +2164,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default Ongaku;
