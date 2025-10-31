@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, Settings, Maximize, Volume2, VolumeX, SkipForward, SkipBack } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, ChevronLeft, ChevronRight, Mic, List, Grid3x3 } from 'lucide-react';
 
 const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
 
-// API Cache with retry logic
 const apiCache = new Map();
 const fetchWithCache = async (url, retries = 2) => {
   if (apiCache.has(url)) {
@@ -47,8 +46,9 @@ const Ongaku = () => {
   const [likedAnimes, setLikedAnimes] = useState([]);
   const [bookmarkedAnimes, setBookmarkedAnimes] = useState([]);
   const [activeView, setActiveView] = useState('home');
-  const [isTheaterMode, setIsTheaterMode] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [spotlightIndex, setSpotlightIndex] = useState(0);
+  const [episodeSearch, setEpisodeSearch] = useState('');
+  const [episodeListView, setEpisodeListView] = useState('grid');
   const iframeRef = useRef(null);
 
   useEffect(() => {
@@ -118,9 +118,7 @@ const Ongaku = () => {
     }
   };
 
-  const toggleTheme = () => {
-    setDarkMode(!darkMode);
-  };
+  const toggleTheme = () => setDarkMode(!darkMode);
 
   const toggleLike = (anime) => {
     const updated = likedAnimes.some(a => a.id === anime.id)
@@ -138,9 +136,7 @@ const Ongaku = () => {
     localStorage.setItem('bookmarkedAnimes', JSON.stringify(updated));
   };
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const handleEpisodeSelect = (episode, index) => {
     setSelectedEpisode(episode);
@@ -163,7 +159,22 @@ const Ongaku = () => {
     return `https://${baseUrl}/stream/s-2/${episodeNum}/${streamType}`;
   };
 
-  const AnimeCard = ({ anime, index }) => (
+  const nextSpotlight = () => {
+    setSpotlightIndex((prev) => (prev + 1) % (homeData?.spotlight?.length || 1));
+  };
+
+  const prevSpotlight = () => {
+    setSpotlightIndex((prev) => (prev - 1 + (homeData?.spotlight?.length || 1)) % (homeData?.spotlight?.length || 1));
+  };
+
+  const filteredEpisodes = episodes.filter(ep => {
+    const searchLower = episodeSearch.toLowerCase();
+    const epNum = episodes.indexOf(ep) + 1;
+    return epNum.toString().includes(episodeSearch) || 
+           (ep.title && ep.title.toLowerCase().includes(searchLower));
+  });
+
+  const AnimeCard = ({ anime, index, rank }) => (
     <div 
       className="anime-card"
       style={{ animationDelay: `${index * 0.1}s` }}
@@ -172,24 +183,11 @@ const Ongaku = () => {
         setActiveView('details');
       }}
     >
+      {rank && <div className="rank-badge">{rank}</div>}
       <div className="anime-card-inner">
         <img src={anime.poster} alt={anime.title} loading="lazy" />
         <div className="anime-overlay">
           <Play className="play-icon" />
-        </div>
-        <div className="anime-actions">
-          <button 
-            onClick={(e) => { e.stopPropagation(); toggleLike(anime); }}
-            className={likedAnimes.some(a => a.id === anime.id) ? 'active' : ''}
-          >
-            <Heart size={18} />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); toggleBookmark(anime); }}
-            className={bookmarkedAnimes.some(a => a.id === anime.id) ? 'active' : ''}
-          >
-            <Bookmark size={18} />
-          </button>
         </div>
       </div>
       <div className="anime-info">
@@ -202,29 +200,82 @@ const Ongaku = () => {
     </div>
   );
 
-  const SpotlightSection = () => (
-    <div className="spotlight-section">
-      {homeData?.spotlight?.slice(0, 5).map((anime, i) => (
-        <div key={i} className="spotlight-item" style={{ animationDelay: `${i * 0.2}s` }}>
-          <img src={anime.poster} alt={anime.title} loading="lazy" />
-          <div className="spotlight-content">
-            <span className="rank">#{anime.rank}</span>
-            <h2>{anime.title}</h2>
-            <p>{anime.synopsis?.slice(0, 200)}...</p>
-            <div className="spotlight-meta">
-              <span><Calendar size={16} /> {anime.aired}</span>
-              <span><Clock size={16} /> {anime.duration}</span>
-              <span className="quality">{anime.quality}</span>
+  const SpotlightSection = () => {
+    const anime = homeData?.spotlight?.[spotlightIndex];
+    if (!anime) return null;
+
+    return (
+      <div className="spotlight-carousel">
+        <button className="carousel-btn prev" onClick={prevSpotlight}>
+          <ChevronLeft size={32} />
+        </button>
+        
+        <div className="spotlight-slide">
+          <img src={anime.poster} alt={anime.title} className="spotlight-bg" />
+          <div className="spotlight-overlay">
+            <div className="spotlight-content">
+              <div className="spotlight-badges">
+                <span className="quality-badge">{anime.quality}</span>
+                <span className="type-badge">{anime.type}</span>
+              </div>
+              <h1 className="spotlight-title">{anime.title}</h1>
+              <p className="spotlight-synopsis">{anime.synopsis?.slice(0, 200)}...</p>
+              <div className="spotlight-meta">
+                <span><Calendar size={16} /> {anime.aired}</span>
+                <span><Clock size={16} /> {anime.duration}</span>
+              </div>
+              <div className="spotlight-actions">
+                <button className="play-button" onClick={() => {
+                  setSelectedAnime(anime);
+                  setActiveView('details');
+                }}>
+                  <Play size={20} /> Watch Now
+                </button>
+                <button 
+                  className={`icon-button ${bookmarkedAnimes.some(a => a.id === anime.id) ? 'active' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); toggleBookmark(anime); }}
+                >
+                  <Bookmark size={20} />
+                </button>
+              </div>
             </div>
-            <button className="watch-btn" onClick={() => {
-              setSelectedAnime(anime);
-              setActiveView('details');
-            }}>
-              <Play size={20} /> Watch Now
-            </button>
           </div>
         </div>
-      ))}
+
+        <button className="carousel-btn next" onClick={nextSpotlight}>
+          <ChevronRight size={32} />
+        </button>
+
+        <div className="carousel-indicators">
+          {homeData?.spotlight?.slice(0, 10).map((_, idx) => (
+            <button
+              key={idx}
+              className={`indicator ${idx === spotlightIndex ? 'active' : ''}`}
+              onClick={() => setSpotlightIndex(idx)}
+            />
+          ))}
+          <span className="indicator-text">{spotlightIndex + 1} / 10</span>
+        </div>
+      </div>
+    );
+  };
+
+  const TrendingSection = () => (
+    <div className="trending-carousel">
+      <div className="carousel-scroll">
+        {homeData?.trending?.slice(0, 10).map((anime, i) => (
+          <div key={anime.id} className="trending-card" onClick={() => {
+            setSelectedAnime(anime);
+            setActiveView('details');
+          }}>
+            <div className="trending-rank">{i + 1}</div>
+            <img src={anime.poster} alt={anime.title} loading="lazy" />
+            <div className="trending-overlay">
+              <h3>{anime.title}</h3>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -271,153 +322,216 @@ const Ongaku = () => {
       )}
 
       <div className="episodes-section">
-        <h2>Episodes ({episodes.length})</h2>
-        <div className="episodes-grid">
-          {episodes.map((ep, i) => (
-            <div 
-              key={i} 
-              className="episode-card"
-              onClick={() => handleEpisodeSelect(ep, i)}
+        <div className="episodes-header">
+          <h2>All Episodes ({episodes.length})</h2>
+          <div className="episodes-controls">
+            <input
+              type="text"
+              placeholder="Find episode..."
+              value={episodeSearch}
+              onChange={(e) => setEpisodeSearch(e.target.value)}
+              className="episode-search-input"
+            />
+            <button 
+              className="view-toggle"
+              onClick={() => setEpisodeListView(episodeListView === 'grid' ? 'list' : 'grid')}
             >
-              <Play size={16} />
-              <div className="episode-info">
-                <span>Episode {i + 1}</span>
-                {ep.title && <small>{ep.title}</small>}
-                {ep.isFiller && <span className="filler-badge">Filler</span>}
+              {episodeListView === 'grid' ? <List size={20} /> : <Grid3x3 size={20} />}
+            </button>
+          </div>
+        </div>
+        
+        <div className={`episodes-grid ${episodeListView}`}>
+          {filteredEpisodes.map((ep, i) => {
+            const actualIndex = episodes.indexOf(ep);
+            return (
+              <div 
+                key={i} 
+                className="episode-card"
+                onClick={() => handleEpisodeSelect(ep, actualIndex)}
+              >
+                {episodeListView === 'grid' ? (
+                  <>
+                    <Play size={16} />
+                    <span className="ep-number">{actualIndex + 1}</span>
+                    {ep.isFiller && <span className="filler-badge">Filler</span>}
+                  </>
+                ) : (
+                  <div className="episode-list-content">
+                    <Play size={16} />
+                    <div className="episode-text">
+                      <span className="ep-number">Episode {actualIndex + 1}</span>
+                      {ep.title && <span className="ep-title">{ep.title}</span>}
+                    </div>
+                    {ep.isFiller && <span className="filler-badge">Filler</span>}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
   );
 
-  const WatchView = () => (
-    <div className="watch-container">
-      <button className="back-btn" onClick={() => setActiveView('details')}>
-        <ArrowLeft size={20} /> Back to Episodes
-      </button>
+  const WatchView = () => {
+    const currentEp = episodes[currentEpisodeIndex];
+    const isLiked = selectedAnime && likedAnimes.some(a => a.id === selectedAnime.id);
+    const isBookmarked = selectedAnime && bookmarkedAnimes.some(a => a.id === selectedAnime.id);
 
-      <div className={`video-wrapper ${isTheaterMode ? 'theater-mode' : ''}`}>
-        <div className="video-container">
-          <iframe
-            ref={iframeRef}
-            src={getStreamUrl()}
-            className="video-player"
-            allowFullScreen
-            allow="autoplay; encrypted-media; picture-in-picture"
-          />
+    return (
+      <div className="watch-container">
+        <button className="back-btn" onClick={() => setActiveView('details')}>
+          <ArrowLeft size={20} /> Back to Episodes
+        </button>
+
+        <div className="video-wrapper">
+          <div className="episode-header">
+            <div className="episode-title-section">
+              <span className="ep-number-badge">{currentEpisodeIndex + 1}.</span>
+              <span className="ep-name">{currentEp?.title || `Episode ${currentEpisodeIndex + 1}`}</span>
+            </div>
+            <div className="episode-actions">
+              <button 
+                className={`icon-btn ${isLiked ? 'liked' : ''}`}
+                onClick={() => selectedAnime && toggleLike(selectedAnime)}
+                title={isLiked ? 'Unlike' : 'Like'}
+              >
+                <Heart size={20} fill={isLiked ? '#ec4899' : 'none'} stroke={isLiked ? '#ec4899' : 'currentColor'} />
+              </button>
+              <button 
+                className={`icon-btn ${isBookmarked ? 'bookmarked' : ''}`}
+                onClick={() => selectedAnime && toggleBookmark(selectedAnime)}
+                title={isBookmarked ? 'Remove Bookmark' : 'Bookmark'}
+              >
+                <Bookmark size={20} fill={isBookmarked ? '#10b981' : 'none'} stroke={isBookmarked ? '#10b981' : 'currentColor'} />
+              </button>
+            </div>
+          </div>
+
+          <div className="video-container">
+            <iframe
+              ref={iframeRef}
+              src={getStreamUrl()}
+              className="video-player"
+              allowFullScreen
+              allow="autoplay; encrypted-media; picture-in-picture"
+            />
+          </div>
+        </div>
+
+        <div className="player-controls-center">
+          <div className="control-row">
+            <div className="audio-selector">
+              <button 
+                className={streamType === 'sub' ? 'active' : ''}
+                onClick={() => setStreamType('sub')}
+              >
+                <Mic size={16} /> SUB
+              </button>
+              <button 
+                className={streamType === 'dub' ? 'active' : ''}
+                onClick={() => setStreamType('dub')}
+              >
+                <Mic size={16} /> DUB
+              </button>
+            </div>
+
+            <div className="server-selector">
+              <button
+                className={server === 'vidWish' ? 'active' : ''}
+                onClick={() => setServer('vidWish')}
+              >
+                VidWish
+              </button>
+              <button
+                className={server === 'megaPlay' ? 'active' : ''}
+                onClick={() => setServer('megaPlay')}
+              >
+                MegaPlay
+              </button>
+            </div>
+
+            <div className="episode-nav">
+              {currentEpisodeIndex > 0 && (
+                <button onClick={() => changeEpisode('prev')} className="nav-btn">
+                  Previous
+                </button>
+              )}
+              {currentEpisodeIndex < episodes.length - 1 && (
+                <button onClick={() => changeEpisode('next')} className="nav-btn primary">
+                  Next
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="player-info">
+            <p>You are watching <strong>Episode {currentEpisodeIndex + 1}</strong></p>
+            <p className="server-info">Please try changing servers if this server isn't loading anything.</p>
+          </div>
+        </div>
+
+        <div className="episodes-section">
+          <div className="episodes-header">
+            <h2>All Episodes ({episodes.length})</h2>
+            <div className="episodes-controls">
+              <input
+                type="text"
+                placeholder="Find episode..."
+                value={episodeSearch}
+                onChange={(e) => setEpisodeSearch(e.target.value)}
+                className="episode-search-input"
+              />
+              <button 
+                className="view-toggle"
+                onClick={() => setEpisodeListView(episodeListView === 'grid' ? 'list' : 'grid')}
+              >
+                {episodeListView === 'grid' ? <List size={20} /> : <Grid3x3 size={20} />}
+              </button>
+            </div>
+          </div>
           
-          <div className="video-overlay">
-            <div className="overlay-top">
-              <div className="episode-badge">
-                Episode {currentEpisodeIndex + 1}
-                {selectedEpisode?.isFiller && <span className="filler-tag">Filler</span>}
-              </div>
-              <div className="overlay-controls">
-                <button onClick={() => setIsTheaterMode(!isTheaterMode)} title="Theater Mode">
-                  <Maximize size={18} />
-                </button>
-                <button onClick={() => setShowSettings(!showSettings)} title="Settings">
-                  <Settings size={18} />
-                </button>
-              </div>
-            </div>
+          <div className={`episodes-grid ${episodeListView}`}>
+            {filteredEpisodes.map((ep, i) => {
+              const actualIndex = episodes.indexOf(ep);
+              const isActive = actualIndex === currentEpisodeIndex;
+              return (
+                <div 
+                  key={i} 
+                  className={`episode-card ${isActive ? 'active' : ''}`}
+                  onClick={() => handleEpisodeSelect(ep, actualIndex)}
+                >
+                  {episodeListView === 'grid' ? (
+                    <>
+                      <Play size={16} />
+                      <span className="ep-number">{actualIndex + 1}</span>
+                      {ep.isFiller && <span className="filler-badge">Filler</span>}
+                    </>
+                  ) : (
+                    <div className="episode-list-content">
+                      <Play size={16} />
+                      <div className="episode-text">
+                        <span className="ep-number">Episode {actualIndex + 1}</span>
+                        {ep.title && <span className="ep-title">{ep.title}</span>}
+                      </div>
+                      {ep.isFiller && <span className="filler-badge">Filler</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
-
-      <div className="player-controls">
-        <div className="control-section">
-          <div className="control-label">Server</div>
-          <div className="button-group">
-            <button
-              className={server === 'vidWish' ? 'active' : ''}
-              onClick={() => setServer('vidWish')}
-            >
-              VidWish
-            </button>
-            <button
-              className={server === 'megaPlay' ? 'active' : ''}
-              onClick={() => setServer('megaPlay')}
-            >
-              MegaPlay
-            </button>
-          </div>
-        </div>
-
-        <div className="control-section">
-          <div className="control-label">Audio</div>
-          <div className="button-group">
-            <button
-              className={streamType === 'sub' ? 'active' : ''}
-              onClick={() => setStreamType('sub')}
-            >
-              SUB
-            </button>
-            <button
-              className={streamType === 'dub' ? 'active' : ''}
-              onClick={() => setStreamType('dub')}
-            >
-              DUB
-            </button>
-          </div>
-        </div>
-
-        <div className="control-section">
-          <div className="control-label">Episode</div>
-          <div className="button-group">
-            {currentEpisodeIndex > 0 && (
-              <button onClick={() => changeEpisode('prev')} className="nav-btn">
-                <SkipBack size={16} /> Previous
-              </button>
-            )}
-            {currentEpisodeIndex < episodes.length - 1 && (
-              <button onClick={() => changeEpisode('next')} className="nav-btn primary">
-                Next <SkipForward size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="episode-info-card">
-        <div className="info-row">
-          <span className="label">Now Watching:</span>
-          <span className="value">Episode {currentEpisodeIndex + 1} of {episodes.length}</span>
-        </div>
-        <div className="info-row">
-          <span className="label">Server:</span>
-          <span className="value">{server === 'vidWish' ? 'VidWish' : 'MegaPlay'}</span>
-        </div>
-        <div className="info-row">
-          <span className="label">Audio:</span>
-          <span className="value">{streamType.toUpperCase()}</span>
-        </div>
-      </div>
-
-      <div className="episodes-list-compact">
-        <h3>All Episodes</h3>
-        <div className="episodes-compact-grid">
-          {episodes.map((ep, i) => (
-            <button
-              key={i}
-              className={`episode-btn ${i === currentEpisodeIndex ? 'active' : ''}`}
-              onClick={() => handleEpisodeSelect(ep, i)}
-            >
-              {i + 1}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className={`app ${darkMode ? 'dark' : 'light'}`}>
       <nav className="navbar">
         <div className="nav-container">
-          <h1 className="logo" onClick={() => setActiveView('home')}>AnimeStream</h1>
+          <h1 className="logo" onClick={() => setActiveView('home')}>音楽子</h1>
           <div className="search-bar">
             <input
               type="text"
@@ -459,11 +573,7 @@ const Ongaku = () => {
                 
                 <section className="anime-section">
                   <h2><TrendingUp size={24} /> Trending Now</h2>
-                  <div className="anime-grid">
-                    {homeData.trending?.slice(0, 12).map((anime, i) => (
-                      <AnimeCard key={anime.id} anime={anime} index={i} />
-                    ))}
-                  </div>
+                  <TrendingSection />
                 </section>
 
                 <section className="anime-section">
@@ -553,12 +663,12 @@ const Ongaku = () => {
         }
 
         .app.dark {
-          background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+          background: #000;
           color: #ffffff;
         }
 
         .app.light {
-          background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+          background: #f5f7fa;
           color: #1a1a2e;
         }
 
@@ -572,12 +682,12 @@ const Ongaku = () => {
         }
 
         .dark .navbar {
-          background: rgba(15, 15, 30, 0.8);
+          background: rgba(0, 0, 0, 0.9);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .light .navbar {
-          background: rgba(255, 255, 255, 0.8);
+          background: rgba(255, 255, 255, 0.9);
           border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
 
@@ -591,7 +701,7 @@ const Ongaku = () => {
         }
 
         .logo {
-          font-size: 1.8rem;
+          font-size: 2rem;
           font-weight: 800;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           -webkit-background-clip: text;
@@ -708,66 +818,81 @@ const Ongaku = () => {
           padding: 2rem;
         }
 
-        .spotlight-section {
-          margin-bottom: 3rem;
-          display: grid;
-          gap: 2rem;
-        }
-
-        .spotlight-item {
+        /* Spotlight Carousel */
+        .spotlight-carousel {
           position: relative;
-          height: 500px;
+          height: 600px;
           border-radius: 20px;
           overflow: hidden;
-          animation: fadeInUp 0.6s ease-out;
+          margin-bottom: 3rem;
         }
 
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        .spotlight-slide {
+          position: relative;
+          width: 100%;
+          height: 100%;
         }
 
-        .spotlight-item img {
+        .spotlight-bg {
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
 
-        .spotlight-content {
+        .spotlight-overlay {
           position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
+          inset: 0;
+          background: linear-gradient(to right, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+          display: flex;
+          align-items: center;
+        }
+
+        .spotlight-content {
+          max-width: 600px;
           padding: 3rem;
-          background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
           color: white;
         }
 
-        .rank {
-          display: inline-block;
-          background: #667eea;
-          padding: 0.25rem 0.75rem;
-          border-radius: 20px;
-          font-weight: bold;
+        .spotlight-badges {
+          display: flex;
+          gap: 0.5rem;
           margin-bottom: 1rem;
         }
 
-        .spotlight-content h2 {
-          font-size: 2.5rem;
+        .quality-badge, .type-badge {
+          padding: 0.25rem 0.75rem;
+          border-radius: 4px;
+          font-size: 0.85rem;
+          font-weight: 600;
+        }
+
+        .quality-badge {
+          background: #10b981;
+        }
+
+        .type-badge {
+          background: rgba(255, 255, 255, 0.2);
+        }
+
+        .spotlight-title {
+          font-size: 3rem;
+          font-weight: 800;
           margin-bottom: 1rem;
+          line-height: 1.2;
+        }
+
+        .spotlight-synopsis {
+          font-size: 1rem;
+          line-height: 1.6;
+          margin-bottom: 1.5rem;
+          opacity: 0.9;
         }
 
         .spotlight-meta {
           display: flex;
           gap: 1.5rem;
-          margin: 1rem 0;
-          align-items: center;
+          margin-bottom: 2rem;
+          font-size: 0.9rem;
         }
 
         .spotlight-meta span {
@@ -776,32 +901,199 @@ const Ongaku = () => {
           gap: 0.5rem;
         }
 
-        .quality {
-          background: #10b981;
-          padding: 0.25rem 0.75rem;
-          border-radius: 4px;
-          font-weight: bold;
+        .spotlight-actions {
+          display: flex;
+          gap: 1rem;
         }
 
-        .watch-btn {
-          display: inline-flex;
+        .play-button {
+          display: flex;
           align-items: center;
           gap: 0.5rem;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border: none;
-          padding: 0.75rem 2rem;
+          padding: 1rem 2rem;
           border-radius: 50px;
-          font-size: 1rem;
+          font-size: 1.1rem;
           font-weight: 600;
           cursor: pointer;
-          margin-top: 1rem;
           transition: all 0.3s ease;
         }
 
-        .watch-btn:hover {
+        .play-button:hover {
           transform: translateY(-2px);
           box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .icon-button {
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          width: 50px;
+          height: 50px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          color: white;
+        }
+
+        .icon-button:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: scale(1.1);
+        }
+
+        .icon-button.active {
+          background: #10b981;
+        }
+
+        .carousel-btn {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(10px);
+          border: none;
+          color: white;
+          width: 50px;
+          height: 50px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          z-index: 10;
+        }
+
+        .carousel-btn:hover {
+          background: rgba(0, 0, 0, 0.8);
+          transform: translateY(-50%) scale(1.1);
+        }
+
+        .carousel-btn.prev {
+          left: 2rem;
+        }
+
+        .carousel-btn.next {
+          right: 2rem;
+        }
+
+        .carousel-indicators {
+          position: absolute;
+          bottom: 2rem;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+
+        .indicator {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.3);
+          border: none;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .indicator.active {
+          background: white;
+          width: 30px;
+          border-radius: 5px;
+        }
+
+        .indicator-text {
+          color: white;
+          font-size: 0.9rem;
+          margin-left: 1rem;
+          font-weight: 600;
+        }
+
+        /* Trending Carousel */
+        .trending-carousel {
+          position: relative;
+          margin-bottom: 2rem;
+        }
+
+        .carousel-scroll {
+          display: flex;
+          gap: 1.5rem;
+          overflow-x: auto;
+          scroll-behavior: smooth;
+          padding-bottom: 1rem;
+        }
+
+        .carousel-scroll::-webkit-scrollbar {
+          height: 6px;
+        }
+
+        .carousel-scroll::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+
+        .carousel-scroll::-webkit-scrollbar-thumb {
+          background: rgba(102, 126, 234, 0.5);
+          border-radius: 10px;
+        }
+
+        .trending-card {
+          position: relative;
+          min-width: 300px;
+          height: 450px;
+          border-radius: 12px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .trending-card:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .trending-card img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .trending-rank {
+          position: absolute;
+          top: 1rem;
+          left: 1rem;
+          width: 60px;
+          height: 60px;
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(10px);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 2rem;
+          font-weight: 800;
+          color: white;
+          z-index: 2;
+        }
+
+        .trending-overlay {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding: 2rem;
+          background: linear-gradient(to top, rgba(0, 0, 0, 0.95), transparent);
+          color: white;
+        }
+
+        .trending-overlay h3 {
+          font-size: 1.2rem;
+          font-weight: 600;
         }
 
         .anime-section {
@@ -823,9 +1115,33 @@ const Ongaku = () => {
         }
 
         .anime-card {
+          position: relative;
           cursor: pointer;
           animation: fadeInUp 0.6s ease-out;
           animation-fill-mode: both;
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .rank-badge {
+          position: absolute;
+          top: 0.5rem;
+          left: 0.5rem;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 20px;
+          font-weight: 700;
+          z-index: 2;
         }
 
         .anime-card-inner {
@@ -868,39 +1184,6 @@ const Ongaku = () => {
           color: white;
         }
 
-        .anime-actions {
-          position: absolute;
-          top: 0.5rem;
-          right: 0.5rem;
-          display: flex;
-          gap: 0.5rem;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .anime-card:hover .anime-actions {
-          opacity: 1;
-        }
-
-        .anime-actions button {
-          background: rgba(0, 0, 0, 0.7);
-          border: none;
-          padding: 0.5rem;
-          border-radius: 50%;
-          cursor: pointer;
-          color: white;
-          transition: all 0.3s ease;
-        }
-
-        .anime-actions button:hover {
-          background: rgba(0, 0, 0, 0.9);
-          transform: scale(1.1);
-        }
-
-        .anime-actions button.active {
-          background: #f43f5e;
-        }
-
         .anime-info {
           margin-top: 0.75rem;
         }
@@ -922,6 +1205,7 @@ const Ongaku = () => {
           opacity: 0.7;
         }
 
+        /* Details Page */
         .anime-details {
           animation: fadeInUp 0.6s ease-out;
         }
@@ -1047,22 +1331,86 @@ const Ongaku = () => {
           border-color: transparent;
         }
 
+        /* Episodes Section */
         .episodes-section {
           margin-top: 3rem;
         }
 
-        .episodes-section h2 {
-          font-size: 1.8rem;
+        .episodes-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           margin-bottom: 1.5rem;
+          gap: 1rem;
+        }
+
+        .episodes-header h2 {
+          font-size: 1.8rem;
+          margin: 0;
+        }
+
+        .episodes-controls {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+
+        .episode-search-input {
+          padding: 0.6rem 1rem;
+          border-radius: 8px;
+          border: none;
+          outline: none;
+          font-size: 0.9rem;
+        }
+
+        .dark .episode-search-input {
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light .episode-search-input {
+          background: rgba(0, 0, 0, 0.05);
+          color: #1a1a2e;
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .view-toggle {
+          background: transparent;
+          border: none;
+          padding: 0.6rem;
+          border-radius: 8px;
+          cursor: pointer;
+          color: inherit;
+          transition: all 0.3s ease;
+        }
+
+        .dark .view-toggle {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .light .view-toggle {
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .view-toggle:hover {
+          transform: scale(1.1);
         }
 
         .episodes-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-          gap: 1rem;
+          gap: 0.75rem;
           max-height: 60vh;
           overflow-y: auto;
           padding-right: 0.5rem;
+        }
+
+        .episodes-grid.grid {
+          grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        }
+
+        .episodes-grid.list {
+          grid-template-columns: 1fr;
         }
 
         .episodes-grid::-webkit-scrollbar {
@@ -1082,11 +1430,13 @@ const Ongaku = () => {
         .episode-card {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
+          justify-content: center;
+          gap: 0.5rem;
           padding: 1rem;
-          border-radius: 12px;
+          border-radius: 8px;
           cursor: pointer;
           transition: all 0.3s ease;
+          position: relative;
         }
 
         .dark .episode-card {
@@ -1100,8 +1450,8 @@ const Ongaku = () => {
         }
 
         .episode-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
         .dark .episode-card:hover {
@@ -1112,20 +1462,41 @@ const Ongaku = () => {
           background: rgba(0, 0, 0, 0.1);
         }
 
-        .episode-info {
+        .episode-card.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-color: transparent;
+        }
+
+        .episodes-grid.list .episode-card {
+          justify-content: flex-start;
+          padding: 1.25rem;
+        }
+
+        .episode-list-content {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          width: 100%;
+        }
+
+        .episode-text {
           flex: 1;
           display: flex;
           flex-direction: column;
           gap: 0.25rem;
         }
 
-        .episode-info small {
-          opacity: 0.7;
+        .ep-number {
+          font-weight: 600;
+        }
+
+        .ep-title {
           font-size: 0.85rem;
+          opacity: 0.7;
         }
 
         .filler-badge {
-          display: inline-block;
           background: #ef4444;
           color: white;
           padding: 0.15rem 0.5rem;
@@ -1134,6 +1505,7 @@ const Ongaku = () => {
           font-weight: bold;
         }
 
+        /* Watch Page */
         .watch-container {
           animation: fadeInUp 0.6s ease-out;
         }
@@ -1142,15 +1514,77 @@ const Ongaku = () => {
           margin-bottom: 2rem;
         }
 
-        .video-wrapper.theater-mode {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 200;
-          background: #000;
-          margin: 0;
+        .episode-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1rem 1.5rem;
+          border-radius: 12px 12px 0 0;
+          margin-bottom: 0;
+        }
+
+        .dark .episode-header {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-bottom: none;
+        }
+
+        .light .episode-header {
+          background: rgba(0, 0, 0, 0.05);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+          border-bottom: none;
+        }
+
+        .episode-title-section {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .ep-number-badge {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #667eea;
+        }
+
+        .ep-name {
+          font-size: 1.1rem;
+          font-weight: 600;
+        }
+
+        .episode-actions {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .icon-btn {
+          background: transparent;
+          border: none;
+          padding: 0.5rem;
+          border-radius: 50%;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          color: inherit;
+        }
+
+        .dark .icon-btn {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .light .icon-btn {
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .icon-btn:hover {
+          transform: scale(1.1);
+        }
+
+        .icon-btn.liked {
+          background: rgba(236, 72, 153, 0.2);
+        }
+
+        .icon-btn.bookmarked {
+          background: rgba(16, 185, 129, 0.2);
         }
 
         .video-container {
@@ -1158,14 +1592,9 @@ const Ongaku = () => {
           width: 100%;
           aspect-ratio: 16/9;
           background: #000;
-          border-radius: 12px;
+          border-radius: 0 0 12px 12px;
           overflow: hidden;
           box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-        }
-
-        .theater-mode .video-container {
-          height: 100vh;
-          border-radius: 0;
         }
 
         .video-player {
@@ -1174,266 +1603,115 @@ const Ongaku = () => {
           border: none;
         }
 
-        .video-overlay {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .video-container:hover .video-overlay {
-          opacity: 1;
-        }
-
-        .overlay-top {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          padding: 1rem;
+        /* Player Controls */
+        .player-controls-center {
           display: flex;
-          justify-content: space-between;
+          flex-direction: column;
           align-items: center;
-          background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
-          pointer-events: auto;
-        }
-
-        .episode-badge {
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(10px);
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          color: white;
-          font-size: 0.9rem;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .filler-tag {
-          background: #ef4444;
-          padding: 0.15rem 0.5rem;
-          border-radius: 10px;
-          font-size: 0.75rem;
-        }
-
-        .overlay-controls {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .overlay-controls button {
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(10px);
-          border: none;
-          padding: 0.5rem;
-          border-radius: 50%;
-          color: white;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .overlay-controls button:hover {
-          background: rgba(255, 255, 255, 0.2);
-          transform: scale(1.1);
-        }
-
-        .player-controls {
-          display: flex;
-          flex-wrap: wrap;
           gap: 1.5rem;
-          padding: 1.5rem;
+          padding: 2rem;
           border-radius: 12px;
-          margin-bottom: 1.5rem;
+          margin-bottom: 2rem;
         }
 
-        .dark .player-controls {
+        .dark .player-controls-center {
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .light .player-controls {
+        .light .player-controls-center {
           background: rgba(0, 0, 0, 0.05);
           border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
-        .control-section {
-          flex: 1;
-          min-width: 200px;
+        .control-row {
+          display: flex;
+          gap: 2rem;
+          flex-wrap: wrap;
+          justify-content: center;
+          align-items: center;
         }
 
-        .control-label {
-          font-size: 0.9rem;
-          font-weight: 600;
-          margin-bottom: 0.75rem;
-          opacity: 0.7;
-        }
-
-        .button-group {
+        .audio-selector, .server-selector, .episode-nav {
           display: flex;
           gap: 0.5rem;
-          flex-wrap: wrap;
         }
 
-        .button-group button {
+        .audio-selector button, .server-selector button {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
           padding: 0.6rem 1.2rem;
           border-radius: 8px;
           border: none;
           cursor: pointer;
-          transition: all 0.3s ease;
           font-weight: 500;
-          font-size: 0.9rem;
+          transition: all 0.3s ease;
         }
 
-        .dark .button-group button {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+        .dark .audio-selector button, .dark .server-selector button {
+          background: transparent;
+          color: rgba(255, 255, 255, 0.7);
         }
 
-        .light .button-group button {
-          background: rgba(0, 0, 0, 0.1);
-          color: #1a1a2e;
-          border: 1px solid rgba(0, 0, 0, 0.1);
+        .light .audio-selector button, .light .server-selector button {
+          background: transparent;
+          color: rgba(0, 0, 0, 0.7);
         }
 
-        .button-group button:hover:not(:disabled) {
-          transform: translateY(-2px);
+        .audio-selector button.active {
+          color: #667eea;
+          font-weight: 700;
         }
 
-        .button-group button.active {
+        .server-selector button.active {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
-          border-color: transparent;
-        }
-
-        .button-group button:disabled {
-          opacity: 0.3;
-          cursor: not-allowed;
         }
 
         .nav-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .nav-btn.primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-          color: white !important;
-          border-color: transparent !important;
-        }
-
-        .episode-info-card {
-          padding: 1.5rem;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
-        }
-
-        .dark .episode-info-card {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .light .episode-info-card {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.5rem 0;
-        }
-
-        .info-row:not(:last-child) {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .label {
-          opacity: 0.7;
-          font-size: 0.9rem;
-        }
-
-        .value {
-          font-weight: 600;
-        }
-
-        .episodes-list-compact {
-          padding: 1.5rem;
-          border-radius: 12px;
-        }
-
-        .dark .episodes-list-compact {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .light .episodes-list-compact {
-          background: rgba(0, 0, 0, 0.05);
-          border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .episodes-list-compact h3 {
-          margin-bottom: 1rem;
-          font-size: 1.2rem;
-        }
-
-        .episodes-compact-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-          gap: 0.5rem;
-          max-height: 40vh;
-          overflow-y: auto;
-          padding-right: 0.5rem;
-        }
-
-        .episodes-compact-grid::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .episodes-compact-grid::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 10px;
-        }
-
-        .episodes-compact-grid::-webkit-scrollbar-thumb {
-          background: rgba(102, 126, 234, 0.5);
-          border-radius: 10px;
-        }
-
-        .episode-btn {
-          padding: 0.75rem;
+          padding: 0.6rem 1.2rem;
           border-radius: 8px;
           border: none;
           cursor: pointer;
-          font-weight: 600;
+          font-weight: 500;
           transition: all 0.3s ease;
         }
 
-        .dark .episode-btn {
+        .dark .nav-btn {
           background: rgba(255, 255, 255, 0.1);
           color: white;
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .light .episode-btn {
+        .light .nav-btn {
           background: rgba(0, 0, 0, 0.1);
           color: #1a1a2e;
           border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
-        .episode-btn:hover {
-          transform: scale(1.05);
+        .nav-btn:hover {
+          transform: translateY(-2px);
         }
 
-        .episode-btn.active {
+        .nav-btn.primary {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border-color: transparent;
+        }
+
+        .player-info {
+          text-align: center;
+          font-size: 0.95rem;
+        }
+
+        .player-info p {
+          margin: 0.25rem 0;
+        }
+
+        .server-info {
+          opacity: 0.7;
+          font-size: 0.85rem;
         }
 
         .back-to-top {
@@ -1504,12 +1782,30 @@ const Ongaku = () => {
             max-width: 100%;
           }
 
+          .spotlight-title {
+            font-size: 2rem;
+          }
+
           .spotlight-content {
             padding: 2rem;
           }
 
-          .spotlight-content h2 {
-            font-size: 1.5rem;
+          .carousel-btn {
+            width: 40px;
+            height: 40px;
+          }
+
+          .carousel-btn.prev {
+            left: 1rem;
+          }
+
+          .carousel-btn.next {
+            right: 1rem;
+          }
+
+          .trending-card {
+            min-width: 250px;
+            height: 375px;
           }
 
           .anime-grid {
@@ -1530,17 +1826,22 @@ const Ongaku = () => {
             font-size: 1.8rem;
           }
 
-          .player-controls {
+          .control-row {
             flex-direction: column;
             gap: 1rem;
           }
 
-          .episodes-compact-grid {
-            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+          .episodes-header {
+            flex-direction: column;
+            align-items: flex-start;
           }
 
-          .episodes-grid {
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          .episodes-controls {
+            width: 100%;
+          }
+
+          .episode-search-input {
+            flex: 1;
           }
         }
       `}</style>
