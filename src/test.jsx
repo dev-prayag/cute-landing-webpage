@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Search, Moon, Sun, Heart, Bookmark, ChevronUp, Play, Star, Clock, Calendar, TrendingUp, ArrowLeft, ChevronLeft, ChevronRight, Mic, List, Grid3x3 } from 'lucide-react';
 
-const API_BASE = 'https://hianime-api-1-h1kg.onrender.com/api/v1';
+const API_BASE = 'https://anihub-psy.onrender.com/api/v1';
 
 const apiCache = new Map();
 const fetchWithCache = async (url, retries = 2) => {
