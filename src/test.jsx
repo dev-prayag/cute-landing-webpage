@@ -57,9 +57,11 @@ const Ongaku = () => {
   const [selectedLetter, setSelectedLetter] = useState(null);
   const [letterAnimes, setLetterAnimes] = useState([]);
   const [isLandscape, setIsLandscape] = useState(false);
+  const [playerKey, setPlayerKey] = useState(0);
   const iframeRef = useRef(null);
   const spotlightRef = useRef(null);
   const playerUrlRef = useRef('');
+  const adBlockerRef = useRef(null);
 
   // Check if device is in landscape mode
   useEffect(() => {
@@ -172,6 +174,157 @@ const Ongaku = () => {
     }
   }, [selectedAnime, activeView]);
 
+  // Ad blocker initialization
+  useEffect(() => {
+    if (activeView === 'watch' && iframeRef.current) {
+      setupAdBlocker();
+    }
+  }, [activeView]);
+
+  const setupAdBlocker = () => {
+    // Create a script to block ads
+    const script = document.createElement('script');
+    script.innerHTML = `
+      (function() {
+        // Block common ad domains
+        const blockedDomains = [
+          'doubleclick.net',
+          'googleads.g.doubleclick.net',
+          'googlesyndication.com',
+          'googletagmanager.com',
+          'google-analytics.com',
+          'facebook.com/tr',
+          'connect.facebook.net',
+          'amazon-adsystem.com',
+          'adsystem.amazon.com',
+          'criteo.com',
+          'adnxs.com',
+          'ads.yahoo.com',
+          'taboola.com',
+          'outbrain.com',
+          'sharethrough.com',
+          'advertising.com',
+          'adsafeprotected.com',
+          'scorecardresearch.com',
+          'quantserve.com',
+          'serving-sys.com',
+          'rubiconproject.com',
+          'indexww.com',
+          'rlcdn.com',
+          'adsymptotic.com',
+          'pubmatic.com',
+          'lijit.com',
+          'advertising.com',
+          'yieldmo.com',
+          'contextweb.com',
+          'teads.tv',
+          'amazon-adsystem.com'
+        ];
+        
+        // Override window.open to prevent popups
+        const originalOpen = window.open;
+        window.open = function(url, target, features) {
+          // Check if the URL is an ad
+          const isAd = blockedDomains.some(domain => url.includes(domain));
+          if (isAd) {
+            console.log('Blocked ad popup:', url);
+            return null;
+          }
+          return originalOpen.call(this, url, target, features);
+        };
+        
+        // Block iframes from ad domains
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+              if (node.tagName === 'IFRAME') {
+                const src = node.src || '';
+                const isAd = blockedDomains.some(domain => src.includes(domain));
+                if (isAd) {
+                  node.remove();
+                  console.log('Blocked ad iframe:', src);
+                }
+              }
+            });
+          });
+        });
+        
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+        
+        // Block common ad selectors
+        const adSelectors = [
+          '[id*="ad"]',
+          '[class*="ad"]',
+          '[id*="ads"]',
+          '[class*="ads"]',
+          '[id*="banner"]',
+          '[class*="banner"]',
+          '[id*="popup"]',
+          '[class*="popup"]',
+          '[id*="modal"]',
+          '[class*="modal"]',
+          '[id*="overlay"]',
+          '[class*="overlay"]'
+        ];
+        
+        const removeAds = () => {
+          adSelectors.forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(element => {
+              // Check if element is actually an ad
+              const computedStyle = window.getComputedStyle(element);
+              const position = computedStyle.getPropertyValue('position');
+              const zIndex = computedStyle.getPropertyValue('z-index');
+              const display = computedStyle.getPropertyValue('display');
+              
+              if (
+                position === 'fixed' || 
+                position === 'absolute' || 
+                (zIndex && parseInt(zIndex) > 1000) ||
+                display === 'none'
+              ) {
+                element.remove();
+              }
+            });
+          });
+        };
+        
+        // Run ad blocker periodically
+        setInterval(removeAds, 1000);
+        
+        // Prevent context menu on right click
+        document.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          return false;
+        });
+        
+        // Prevent text selection
+        document.addEventListener('selectstart', (e) => {
+          e.preventDefault();
+          return false;
+        });
+        
+        // Prevent drag and drop
+        document.addEventListener('dragstart', (e) => {
+          e.preventDefault();
+          return false;
+        });
+      })();
+    `;
+    
+    document.head.appendChild(script);
+    adBlockerRef.current = script;
+    
+    return () => {
+      if (adBlockerRef.current && document.head.contains(adBlockerRef.current)) {
+        document.head.removeChild(adBlockerRef.current);
+      }
+    };
+  };
+
   const fetchHomeData = async () => {
     try {
       const data = await fetchWithCache(`${API_BASE}/home`);
@@ -274,7 +427,7 @@ const Ongaku = () => {
     setSelectedEpisode(episode);
     setCurrentEpisodeIndex(index);
     setActiveView('watch');
-    setShouldReloadPlayer(true);
+    setPlayerKey(prev => prev + 1); // Increment key to force re-render only when needed
     
     // Add to watch history
     const historyItem = {
@@ -300,7 +453,7 @@ const Ongaku = () => {
     if (newIndex >= 0 && newIndex < episodes.length) {
       setSelectedEpisode(episodes[newIndex]);
       setCurrentEpisodeIndex(newIndex);
-      setShouldReloadPlayer(true);
+      setPlayerKey(prev => prev + 1); // Increment key to force re-render only when needed
       
       // Add to watch history
       const historyItem = {
@@ -324,12 +477,12 @@ const Ongaku = () => {
 
   const changeStreamType = (type) => {
     setStreamType(type);
-    setShouldReloadPlayer(true);
+    setPlayerKey(prev => prev + 1); // Increment key to force re-render only when needed
   };
 
   const changeServer = (serverName) => {
     setServer(serverName);
-    setShouldReloadPlayer(true);
+    setPlayerKey(prev => prev + 1); // Increment key to force re-render only when needed
   };
 
   // Memoize the stream URL to prevent unnecessary recalculations
@@ -344,7 +497,6 @@ const Ongaku = () => {
   useEffect(() => {
     if (playerUrlRef.current !== streamUrl) {
       playerUrlRef.current = streamUrl;
-      setShouldReloadPlayer(true);
     }
   }, [streamUrl]);
 
@@ -597,13 +749,14 @@ const Ongaku = () => {
         <div className="video-container">
           {selectedEpisode ? (
             <iframe
-              key={shouldReloadPlayer ? 'reload' : 'keep'}
+              key={playerKey}
               ref={iframeRef}
               src={streamUrl}
               className="video-player"
               allowFullScreen
               allow="autoplay; encrypted-media; picture-in-picture"
-              onLoad={() => setShouldReloadPlayer(false)}
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              referrerPolicy="no-referrer"
             />
           ) : (
             <div className="video-loader">
